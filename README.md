@@ -23,15 +23,15 @@ The main user is a person splitting a restaurant bill with friends or family, us
 - **Saving & History** — logged-in users save results manually (optionally titled); saving closes the calculator and shows a brief confirmation. **History** groups saved results by date; each can be opened (details, share, **Edit a copy**) or **deleted** after a confirmation. Saved results are read-only snapshots.
 - **Pages** — Home (calculator entry point + illustration, About and Contact Us sections) and History.
 
-The full, approved product requirements — calculation rules, worked examples, edge cases and acceptance criteria — are in [src/docs/REQUIREMENTS.md](src/docs/REQUIREMENTS.md).
+The full, approved product requirements — calculation rules, worked examples, edge cases and acceptance criteria — are in [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 
 ## Product documents
 
 Read in this order; each builds on the one before:
 
-1. [App Roles](src/docs/app-roles.md) — who uses the app: the **Guest Diner** and the **Registered Diner**.
-2. [Jobs To Be Done](src/docs/jobs-to-be-done.md) — why they use it (J-1 … J-11), each tied to a role.
-3. [User Stories with Acceptance Criteria](src/docs/user-stories.md) — how the app helps (S-1 … S-17), each tied to a job, with Given/When/Then criteria and a status (14 Implemented, 3 Not implemented: round-up, pre-tax tipping, password reset).
+1. [App Roles](docs/app-roles.md) — who uses the app: the **Guest Diner** and the **Registered Diner**.
+2. [Jobs To Be Done](docs/jobs-to-be-done.md) — why they use it (J-1 … J-11), each tied to a role.
+3. [User Stories with Acceptance Criteria](docs/user-stories.md) — how the app helps (S-1 … S-17), each tied to a job, with Given/When/Then criteria and a status (14 Implemented, 3 Not implemented: round-up, pre-tax tipping, password reset).
 
 ## Tech stack
 
@@ -47,10 +47,11 @@ Read in this order; each builds on the one before:
 
 ```text
 README.md
+session-tip-and-bill-splitter.txt   # transcript of the AI build session
+docs/                       # REQUIREMENTS.md, app-roles.md, jobs-to-be-done.md, user-stories.md
 src/
 ├── docker-compose.yml      # frontend + backend + MySQL
 ├── .env.example            # copy to .env (local settings and secrets)
-├── docs/                   # REQUIREMENTS.md, app-roles.md, jobs-to-be-done.md, user-stories.md
 ├── shared/calc/            # calculation engine (money parsing, fair-cent allocation, validation) + its tests
 ├── backend/                # NestJS API
 │   ├── src/auth/           # signup / login / logout / me, JWT guard
@@ -169,7 +170,7 @@ All routes are under `/api`.
 
 ## AI tool and model used
 
-This project was designed and built with **Claude Code** (Anthropic's coding agent, used from the VS Code extension) running **Claude Opus 5.5** (`claude-opus-5-5`). The AI took part in requirements discussion, wrote the requirements document, implemented all code and tests, and ran the verification described above. Every product decision was made or approved by the project owner — see the decision log in [REQUIREMENTS.md](session-tip-and-bill-splitter.txt).
+This project was designed and built with **Claude Code** (Anthropic's coding agent, used from the VS Code extension) running **Claude Opus 5.5** (`claude-opus-5-5`). The AI took part in requirements discussion, wrote the requirements document, implemented all code and tests, and ran the verification described above. Every product decision was made or approved by the project owner — see the decision log in [REQUIREMENTS.md](docs/REQUIREMENTS.md#14-decision-log). The full conversation with the AI is in [session-tip-and-bill-splitter.txt](session-tip-and-bill-splitter.txt).
 
 ## Manual code changes
 
