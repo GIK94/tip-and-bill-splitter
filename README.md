@@ -194,7 +194,3 @@ Technical assumptions:
 - PDFs use the built-in PDF fonts, which cover Latin characters only; names in other scripts (or emoji) may not render in the PDF. The PNG export and the shared text are unaffected.
 - History groups entries by the **viewer's local date**; times are stored in UTC.
 - No password reset or email verification in v1. Sessions last 24 hours, after which the user is asked to log in again.
-
-## Submission notes
-
-`node_modules/`, build output (`dist/`) and the local `src/.env` are excluded (see `.gitignore`). Everything is recreated by the commands above.
