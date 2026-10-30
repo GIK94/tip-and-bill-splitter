@@ -47,7 +47,7 @@ Read in this order; each builds on the one before:
 
 ```text
 README.md
-session-tip-and-bill-splitter.txt   # transcript of the AI build session
+transcripts/                # session-tip-and-bill-splitter.txt (transcript of the AI build session)
 docs/                       # REQUIREMENTS.md, app-roles.md, jobs-to-be-done.md, user-stories.md
 src/
 ├── docker-compose.yml      # frontend + backend + MySQL
@@ -170,7 +170,7 @@ All routes are under `/api`.
 
 ## AI tool and model used
 
-This project was designed and built with **Claude Code** (Anthropic's coding agent, used from the VS Code extension) running **Claude Opus 5.5** (`claude-opus-5-5`). The AI took part in requirements discussion, wrote the requirements document, implemented all code and tests, and ran the verification described above. Every product decision was made or approved by the project owner — see the decision log in [REQUIREMENTS.md](docs/REQUIREMENTS.md#14-decision-log). The full conversation with the AI is in [session-tip-and-bill-splitter.txt](session-tip-and-bill-splitter.txt).
+This project was designed and built with **Claude Code** (Anthropic's coding agent, used from the VS Code extension) running **Claude Opus 5.5** (`claude-opus-5-5`). The AI took part in requirements discussion, wrote the requirements document, implemented all code and tests, and ran the verification described above. Every product decision was made or approved by the project owner — see the decision log in [REQUIREMENTS.md](docs/REQUIREMENTS.md#14-decision-log). The full conversation with the AI is in [transcripts/session-tip-and-bill-splitter.txt](transcripts/session-tip-and-bill-splitter.txt).
 
 ## Manual code changes
 
