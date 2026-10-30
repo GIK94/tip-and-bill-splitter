@@ -11,6 +11,23 @@ The main user is a person splitting a restaurant bill with friends or family, us
 | Guest | ✅ | ✅ | — | — |
 | Logged-in user | ✅ | ✅ | ✅ (manual only) | ✅ (own results only) |
 
+## Problem it solves
+
+When a group eats out, someone has to work out the tip and split the bill on the spot, usually on a phone at the table. Done by hand, this goes wrong in predictable ways:
+
+- **Awkward mental maths** — working out a percentage tip and dividing an odd total between several people is slow and easy to get wrong while everyone waits.
+- **Cents that don't add up** — rounding each share separately means the shares come to a few cents more or less than the bill, and someone ends up covering the gap.
+- **Unfair even splits** — when people ordered very different amounts, splitting evenly makes light eaters pay for others, and working out a fair itemised split by hand (including tax and tip) is tedious.
+- **Sharing the result** — once worked out, the numbers still have to be sent to everyone, usually by retyping them into a chat.
+
+## Reasons for this choice
+
+- **A common, everyday problem** — almost everyone splits a bill at some point, and the frustrations above are familiar, so the value of the app is easy to see and test.
+- **A clear user in a clear situation** — the person splitting the bill at the table is under time pressure and wants to get it right in front of friends. That drives the design: mobile-first, no account needed to calculate, and the result one tap away from WhatsApp.
+- **Correctness matters and can be proven** — money has to add up exactly. That made fair-cent allocation and a shared, heavily tested calculation engine the core of the app, rather than an afterthought.
+- **Fairness, not just arithmetic** — the itemised split solves the real complaint with even splits, which a basic tip calculator doesn't.
+- **Accounts only where they add value** — most splits are one-off, so guests get every calculation and sharing feature. Saving and History are for people who regularly split bills with the same group and want to look back or reuse a previous split.
+
 ## Features
 
 - **Even split** — bill + tip divided equally between 1–50 people.
