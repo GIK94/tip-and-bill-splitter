@@ -169,7 +169,7 @@ All routes are under `/api`.
 
 ## AI tool and model used
 
-This project was designed and built with **Claude Code** (Anthropic's coding agent, used from the VS Code extension) running **Claude Opus 5.5** (`claude-opus-5-5`). The AI took part in requirements discussion, wrote the requirements document, implemented all code and tests, and ran the verification described above. Every product decision was made or approved by the project owner — see the decision log in [REQUIREMENTS.md](src/docs/REQUIREMENTS.md#14-decision-log).
+This project was designed and built with **Claude Code** (Anthropic's coding agent, used from the VS Code extension) running **Claude Opus 5.5** (`claude-opus-5-5`). The AI took part in requirements discussion, wrote the requirements document, implemented all code and tests, and ran the verification described above. Every product decision was made or approved by the project owner — see the decision log in [REQUIREMENTS.md](session-tip-and-bill-splitter.txt).
 
 ## Manual code changes
 
