@@ -1,0 +1,3568 @@
+
+> I have chosen to build a Tip and Bill Splitter for people dining with friends
+  or in a group. They need to calculate the tip, the total bill, and each
+  person’s share. The app should make these calculations quicker and help
+  prevent mistakes from doing them by hand.
+
+  Act as a world-class product engineer. Help me design and build this app
+  based on the requirements I provide. Don’t assume requirements or start
+  coding until we’ve discussed and agreed on the product scope. As we go, help
+  me turn the agreed requirements into clear product documents, implement the
+  app, and check that it works as specified.
+
+  Listed 1 directory (ctrl+o to expand)
+
+● The project folder is empty, so we're starting from scratch. I won't write any
+  code until we agree on the scope. Here's how I suggest we work:
+
+  1. Agree on scope (now). We answer the questions below.
+  2. Write the requirements doc. It covers user stories, calculation rules, edge
+     cases and acceptance criteria. You review it.
+  3. Build the agreed v1.
+  4. Check it against the acceptance criteria, using automated tests for the
+     math plus a manual walkthrough.
+
+  The core problem as I understand it
+
+  A group finishes a meal. Someone has the bill and needs to work out, quickly
+  and correctly: the tip, the total, and how much each person pays. The app's
+  whole job is speed and trust: fewer taps than a phone calculator, and no
+  arithmetic mistakes.
+
+  Questions to settle (my recommendation is in bold)
+
+  1. Platform: where will people use it?
+  - Mobile-friendly web app (opens in any phone browser, no install, easy to
+    share) ← recommended for v1
+  - Native iOS/Android app
+  - Desktop only
+
+  2. How is the bill split?
+  - v1: equal split only (bill + tip ÷ number of people)
+  - Later: uneven splits (each person pays for their own items, or custom
+    amounts/percentages)
+
+  Equal split covers most real cases and keeps v1 simple. Item-by-item splitting
+  is a much bigger feature.
+
+  3. How is the tip entered?
+  - Preset buttons (e.g. 10%, 15%, 18%, 20%) plus a custom % field
+  - Should people also be able to enter a fixed tip amount (e.g. $20) instead of
+    a percentage?
+
+  4. Is the tip worked out on the pre-tax or post-tax amount?
+  - Etiquette in the US usually says pre-tax. Should v1 have a separate tax
+    field, or just one "bill amount" field? I'd keep v1 to a single bill amount
+    unless your users need the tax split out.
+
+  5. Rounding: what happens with leftover cents?
+  Example: $100 ÷ 3 = $33.333…
+  - Show each share rounded to the cent and note the leftover (e.g. "one person
+    pays $0.01 extra"), so the shares always add up exactly to the total
+  - Optional "round up each share to the nearest dollar" toggle?
+
+  6. Currency and locale
+  - One currency (which one?), or a currency selector? I'd suggest one currency
+    symbol in v1.
+
+  7. Out of scope for v1? I'd suggest leaving all of these out:
+  - user accounts and saved history
+  - payment integrations (Venmo, PayPal, etc.)
+  - scanning receipts with OCR
+  - sharing results with the group
+
+  8. Anything you've already decided? For example a tech stack preference,
+  branding, accessibility needs, a deadline, or who the audience is.
+
+  Answer whichever of these you like, and push back on any recommendation you
+  disagree with. Once we've agreed, I'll write up the requirements doc for you
+  to review before I build anything.
+
+> Answers to your questions
+  1. Platform: Build a mobile-friendly web app that works in a phone browser
+  without installation.
+  2. Split methods: Include both even and itemised splitting. Before coding,
+  explain the calculation rules and key edge cases for each.
+  3. Tips: Offer 0%, 10%, 15%, 18%, and 20% presets, plus custom percentage or
+  fixed-amount tips.
+  4. Tax: Use one bill amount that already includes tax. For an even split,
+  calculate the tip on that amount. For itemised splitting, allocate the bill
+  and tip proportionally to each person’s items.
+  5. Rounding: Show amounts to two decimal places and distribute leftover cents
+  fairly so all shares add up exactly to the total. Do not add a round-up
+  option.
+  6. Currency: Use USD.
+  7. Accounts and history: Include sign-up, login, and logout. Guests can
+  calculate but their results are not saved. Logged-in users can manually save
+  calculations, view their saved history, and share saved results. Do not save
+  calculations automatically.
+
+  I’ll provide the user flow and tech stack next. Please don’t start coding
+  yet.
+
+● Here are the calculation rules I'd propose for both split methods. Once you
+  confirm them (and send the user flow and tech stack), I'll turn everything
+  into the requirements doc.
+
+  Shared rules (both methods)
+
+  - All money math uses whole cents, never floating-point dollars. This rules
+    out errors like 0.1 + 0.2 = 0.30000000000000004.
+  - Bill amount (B): required. Must be more than $0.00 and at most $99,999.99,
+    with at most 2 decimal places. It already includes tax.
+  - Tip (T):
+    - Percentage (presets 0 / 10 / 15 / 18 / 20, or a custom %): T = B × % /
+      100, rounded half-up to the cent. Custom % must be between 0 and 100, with
+      up to 2 decimal places.
+    - Fixed amount: T is entered directly in dollars, at least $0.00, up to 2
+      decimal places.
+  - Grand total: G = B + T.
+  - Each person's result shows three numbers: bill share, tip share and total.
+    The bill shares add up to exactly B, the tip shares to exactly T, and the
+    totals to exactly G.
+  - Fair cent distribution (largest-remainder method):
+    a. Work out each person's exact share.
+    b. Round every share down to the cent.
+    c. Hand out the cents left over, one at a time, to the people whose
+       rounded-off fractions were largest. If two people tie, the person listed
+       first gets the cent.
+
+    The result: nobody is ever more than 1¢ away from their exact share, and the
+    same inputs always give the same output.
+  - How the three numbers are built: I split the total G with the method above,
+    then split the tip T the same way, and set bill share = total share − tip
+    share. This makes all three columns add up exactly at once.
+
+  Method 1: Even split
+
+  - Inputs: B, the tip, and the number of people N (a whole number from 1
+    to 50).
+  - Calculation: G is shared equally among the N people. Each person gets G ÷ N,
+    rounded down to the cent. The leftover cents go +1¢ each to the first
+    people in the list.
+
+  Example: $100.00 bill, 18% tip, 3 people
+  - Tip = $18.00 and total = $118.00
+  - Totals: $39.34, $39.33, $39.33, which add up to $118.00 ✓
+  - Tip shares: $6.00 each. Bill shares: $33.34, $33.33, $33.33.
+
+  Edge cases
+  - N = 1: that person pays everything.
+  - 0% tip: only the bill is split.
+  - A fixed tip larger than the bill is allowed, but the app shows a warning.
+  - If the total is fewer cents than there are people (e.g. $0.02 split 3 ways),
+    some people pay $0.00. This is mathematically correct, and B > 0 makes it
+    rare.
+
+  Method 2: Itemised split
+
+  - Inputs:
+    - B and the tip, as above
+    - a list of people (names; default "Person 1", "Person 2", …)
+    - a list of items, each with a price and one or more people assigned
+  - Shared items: the item's price is divided equally among the people assigned
+    to it.
+  - Weights: each person's weight is the sum of their item portions. W = the sum
+    of all item prices.
+  - Proportional allocation: person i pays G × (weight_i / W) in total, and T ×
+    (weight_i / W) in tip. Both are then distributed fairly to the cent.
+  - Bill amount vs. items: B is the source of truth. The difference B − W (tax,
+    service charge, etc.) is spread proportionally, as you specified, and the
+    app shows it as "Tax & fees: $X."
+
+  Example: B = $54.00, 20% tip
+  - Items: Pasta $20 (Alice), Steak $25 (Bob), Fries $6 shared by Alice, Bob and
+    Cara. W = $51.00.
+  - Weights: Alice $22, Bob $27, Cara $2.
+  - Tip = $10.80 and G = $64.80.
+  - Totals: Alice $27.95, Bob $34.31, Cara $2.54, which add up to $64.80 ✓.
+    Bob's exact share had the largest fraction, so he gets the leftover cent.
+  - Tip shares: $4.66, $5.72, $0.42, which add up to $10.80 ✓
+  - Bill shares: $23.29, $28.59, $2.12, which add up to $54.00 ✓
+
+  Edge cases (proposed handling)
+
+  ┌──────────────────────┬──────────────────────────────────────────────────┐
+  │         Case         │                     Handling                     │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ An item has no one   │ Block calculation and highlight the item         │
+  │ assigned             │                                                  │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Items sum to $0 (or  │ Block: there's nothing to split by               │
+  │ there are no items)  │                                                  │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ An item priced at    │ Allowed; it adds no weight                       │
+  │ $0.00                │                                                  │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ A person has no      │ Allowed; they pay $0.00, with a warning ("Dan    │
+  │ items                │ has no items")                                   │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Items sum is less    │ Normal (tax/fees); the difference is spread      │
+  │ than B               │ proportionally                                   │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Items sum is more    │ Allowed (e.g. a discount was applied), with a    │
+  │ than B               │ warning; the shares are scaled down              │
+  │                      │ proportionally                                   │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Two people with the  │ Block: names must be unique so the results are   │
+  │ same name            │ clear                                            │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Item quantity        │ No quantity field; the price entered is the line │
+  │                      │  total (e.g. "2× beer = $14")                    │
+  ├──────────────────────┼──────────────────────────────────────────────────┤
+  │ Limits               │ 1–50 people, 1–100 items                         │
+  └──────────────────────┴──────────────────────────────────────────────────┘
+
+  Questions for you to confirm
+
+  1. Cent tie-break: is "the first-listed person gets the extra cent"
+     acceptable? The alternatives are random, or the person who paid the bill.
+  2. Items sum more than B: should it warn and continue (my proposal), or block?
+  3. Fixed tip larger than the bill: should it warn (my proposal), or block?
+  4. When the app recalculates: should results update live as people type (my
+     recommendation), or only when they press a "Calculate" button?
+  5. Changing inputs after a calculation is saved: should saved calculations be
+     read-only snapshots, or editable? I'd suggest snapshots: you edit a copy
+     and save it as a new entry.
+  6. Sharing: I'm assuming a read-only public link that anyone can open without
+     logging in. Should the owner be able to revoke it? I'm happy to hold this
+     until you send the user flow.
+
+  Once you've answered these and sent the user flow and tech stack, I'll write
+  the requirements doc for your review.
+
+> Thanks. My decisions:
+
+  1. First-listed person gets any tied leftover cent.
+  2. If item prices exceed the bill amount, warn and continue with proportional
+  scaling.
+  3. If a fixed tip exceeds the bill, warn and continue.
+  4. Recalculate only when the user presses Calculate.
+  5. Saved calculations are read-only snapshots. Users can edit a copy and save
+  it as a new entry.
+  6. For now, sharing means exporting or sending the result
+  (image/PDF/WhatsApp), not creating a public link. Please leave public links
+  out of scope.
+
+  I’ll provide the user flow and tech stack separately. Before drafting
+  requirements, please correct the itemised example: its displayed total shares
+  add up to $64.80, but the bill-share and tip-share figures shown do not
+  reconcile with those totals.
+
+● I rechecked the itemised example and it does reconcile, so I haven't changed
+  it. Here's the arithmetic. If you're seeing a different figure, tell me which
+  one and I'll trace it.
+
+  Example inputs: B = $54.00, 20% tip → T = $10.80, G = $64.80. Weights: Alice
+  22, Bob 27, Cara 2 (W = 51).
+
+  ┌────────┬────────────────┬────────────────┬────────────────┐
+  │ Person │   Bill share   │  + Tip share   │    = Total     │
+  ├────────┼────────────────┼────────────────┼────────────────┤
+  │ Alice  │ $23.29         │ $4.66          │ $27.95         │
+  ├────────┼────────────────┼────────────────┼────────────────┤
+  │ Bob    │ $28.59         │ $5.72          │ $34.31         │
+  ├────────┼────────────────┼────────────────┼────────────────┤
+  │ Cara   │ $2.12          │ $0.42          │ $2.54          │
+  ├────────┼────────────────┼────────────────┼────────────────┤
+  │ Sum    │ $54.00 ✓ (= B) │ $10.80 ✓ (= T) │ $64.80 ✓ (= G) │
+  └────────┴────────────────┴────────────────┴────────────────┘
+
+  Step by step, in cents:
+
+  - Totals = 6480 × weight / 51:
+    - Exact values: Alice 2795.29, Bob 3430.59, Cara 254.12
+    - Rounded down, they add up to 6479, leaving 1¢
+    - Bob has the largest fraction (.59), so he gets it
+    - Result: 2795 / 3431 / 254
+  - Tips = 1080 × weight / 51:
+    - Exact values: Alice 465.88, Bob 571.76, Cara 42.35
+    - Rounded down, they add up to 1078, leaving 2¢
+    - Alice (.88) and Bob (.76) get one each
+    - Result: 466 / 572 / 42
+  - Bill shares = total − tip: 2329 / 2859 / 212, which add up to 5400 ✓
+
+  A second check: suppose the bill alone is split proportionally (5400 × weight
+  / 51 = 2329.41 / 2858.82 / 211.76) with leftover cents handed out the same
+  way. That gives the same bill shares: $23.29 / $28.59 / $2.12. So the result
+  holds whether the bill share is derived (total − tip) or allocated directly.
+  I'll put both checks in the acceptance tests.
+
+  Decisions recorded
+
+  ┌─────┬────────────────────────────────────────────────────────────────────┐
+  │  #  │                              Decision                              │
+  ├─────┼────────────────────────────────────────────────────────────────────┤
+  │ 1   │ Tied leftover cents go to the first-listed person                  │
+  ├─────┼────────────────────────────────────────────────────────────────────┤
+  │ 2   │ If item prices exceed the bill, the app warns and continues,       │
+  │     │ scaling shares down proportionally                                 │
+  ├─────┼────────────────────────────────────────────────────────────────────┤
+  │ 3   │ If a fixed tip exceeds the bill, the app warns and continues       │
+  ├─────┼────────────────────────────────────────────────────────────────────┤
+  │ 4   │ Results are recalculated only when the user presses Calculate (not │
+  │     │  live)                                                             │
+  ├─────┼────────────────────────────────────────────────────────────────────┤
+  │ 5   │ Saved calculations are read-only snapshots. "Edit a copy" opens a  │
+  │     │ pre-filled form that saves as a new entry                          │
+  ├─────┼────────────────────────────────────────────────────────────────────┤
+  │ 6   │ Sharing means exporting or sending the result (image, PDF or       │
+  │     │ WhatsApp). Public links are out of scope                           │
+  └─────┴────────────────────────────────────────────────────────────────────┘
+
+  Two small follow-ups on sharing, for when you send the user flow:
+  - Can guests share? I'd assume they can export or send their current result
+    even though it isn't saved. Please confirm.
+  - Which methods? WhatsApp sharing on the web usually means a pre-filled text
+    message, sent through a wa.me link or the phone's built-in share menu. Image
+    and PDF are separate file downloads. Should v1 include all three?
+
+  When you send the user flow and tech stack, I'll draft the requirements doc.
+
+> <ide_opened_file>The user opened the file Untitled-1 in the IDE. This may or
+  may not be related to the current task.</ide_opened_file>
+
+> Yes, guests can share or export their current result without saving it.
+
+  Include all three sharing options in v1: WhatsApp text sharing, image
+  download, and PDF download. If WhatsApp sharing is unavailable in a browser,
+  show a clear message and let the user copy the result text instead.
+
+● Recorded:
+
+  ┌─────┬────────────────────────────────────────────────────────────────────┐
+  │  #  │                              Decision                              │
+  ├─────┼────────────────────────────────────────────────────────────────────┤
+  │ 7   │ Guests can share or export their current result without saving it  │
+  ├─────┼────────────────────────────────────────────────────────────────────┤
+  │ 8   │ v1 includes three sharing options: WhatsApp text sharing, image    │
+  │     │ download and PDF download                                          │
+  ├─────┼────────────────────────────────────────────────────────────────────┤
+  │ 9   │ If WhatsApp sharing is unavailable, show a clear message and let   │
+  │     │ the user copy the result text instead                              │
+  └─────┴────────────────────────────────────────────────────────────────────┘
+
+  One limit to know about decision 9: a web page can't reliably tell whether
+  WhatsApp is installed on the device. Here's what I'd propose:
+
+  - The WhatsApp button opens a pre-filled wa.me link. On phones this opens the
+    app; on desktop it opens WhatsApp Web.
+  - If the browser blocks the link from opening, the app shows the message:
+    "Couldn't open WhatsApp. Copy the result text and paste it into any chat."
+    It also shows a Copy text button.
+  - A Copy text option is always available on the sharing panel, not only after
+    a failure. That covers cases where the link opens but WhatsApp then isn't
+    actually there.
+
+  Unless you'd rather do it differently, I'll write this into the requirements
+  doc.
+
+  I'm ready for the user flow and tech stack whenever you are. Once I have them,
+  I'll draft the requirements doc for your review.
+
+> <ide_opened_file>The user opened the file Untitled-1 in the IDE. This may or
+  may not be related to the current task.</ide_opened_file>
+
+> Agreed. Use the proposed WhatsApp behavior. and keep Copy text available as a
+  sharing option
+
+● Agreed and recorded:
+
+  ┌─────┬────────────────────────────────────────────────────────────────────┐
+  │  #  │                              Decision                              │
+  ├─────┼────────────────────────────────────────────────────────────────────┤
+  │     │ WhatsApp opens a pre-filled wa.me link (the app on phones,         │
+  │ 10  │ WhatsApp Web on desktop). If the browser blocks it, the app shows  │
+  │     │ the "Couldn't open WhatsApp…" message with a Copy text button      │
+  ├─────┼────────────────────────────────────────────────────────────────────┤
+  │ 11  │ Copy text is a sharing option in its own right, always visible     │
+  │     │ next to WhatsApp, image and PDF                                    │
+  └─────┴────────────────────────────────────────────────────────────────────┘
+
+  That settles the calculation rules, edge cases, saving and sharing. I'll wait
+  for your user flow and tech stack before drafting the requirements doc.
+
+> Users and app flow
+
+  - The main user is a person splitting a restaurant bill with friends or
+  family, usually on a phone.
+  - The landing page has Home, About, and Contact Us navigation.
+  - For guests, show Login and Sign Up buttons.
+  - After login, show Home, About, Contact Us, History, and the user’s name.
+  Clicking the name opens a dropdown menu with option of Logout.
+  - On the Home page, show the calculator in the left side of the hero area and
+  a relevant image on the right. On mobile, hide the hero image.
+  - The calculator form opens in a modal. The modal has a close button. After
+  calculation, show the result and available Save and Share actions.
+  - Guests can calculate and share/export the current result, but cannot save
+  it.
+  - Logged-in users can save a result manually. Do not save calculations
+  automatically.
+  - The History page has a hero banner and a list of saved calculations grouped
+  or ordered by date. Selecting a calculation opens its details in a modal,
+  where it can be shared.
+  - Write suitable, concise content for the About and Contact Us sections. Do
+  not invent real contact details; use clearly identified placeholder contact
+  information if needed.
+  Technology and local setup
+
+  - Frontend: React.js with Vite and Ant Design.
+  - Backend: NestJS with JWT-based authentication.
+  - Database: MySQL.
+  - Use separate frontend and backend folders.
+  - Use Docker Compose to run the frontend, backend, and MySQL locally.
+  - The reviewer must be able to run the project by following the README.
+  - Include secure password handling, input validation, protected history
+  endpoints, and ensure users can access only their own saved calculations.
+
+  Follow structure
+
+  - README.md
+    -src/ (include source code with docker)
+
+  The README must explain the app and its users, prerequisites, exact
+  install/run commands, how to run tests if included, the AI tool/model used,
+  manual code changes, and assumptions. Exclude node_modules and build output
+  from the submission.
+
+● Write(docs\REQUIREMENTS.md)
+  ⎿  Wrote 323 lines to docs\REQUIREMENTS.md
+      1 # Tip & Bill Splitter — Product Requirements (v1)
+      2
+      3 **Status:** Draft for review · **Date:** 2026-10-29 · **Currency:
+        ** USD
+      4
+      5 ---
+      6
+      7 ## 1. Overview
+      8
+      9 People dining in a group need to work out the tip, the grand tota
+     … +315 lines (~16 KB) (ctrl+o to expand)
+
+  Wrote 2 memories (ctrl+o to expand)
+
+● Written for: you as the product owner, plus the reviewer who will assess the
+  submission.
+
+  I've written the requirements doc to src/docs/REQUIREMENTS.md and haven't
+  started coding. I put it inside src/ so the top level stays exactly README.md
+  + src/, as you asked.
+
+  It brings together everything we've agreed:
+  - Scope: what's in and out of v1.
+  - Pages and navigation: what guests and logged-in users each see.
+  - User flows: calculating, saving, history and signing in.
+  - Input rules: the limits on every field.
+  - Calculation rules and edge cases: both worked examples, with the
+    cent-by-cent check.
+  - Sharing: the four options and the WhatsApp fallback.
+  - Security: how passwords, logins and history access are protected.
+  - Content and layout: Home, About, Contact Us, plus the mobile and
+    accessibility requirements.
+  - Acceptance criteria: 19 checks (AC-01 to AC-19) I'll test the finished app
+    against.
+  - Decision log: decisions D1 to D16.
+
+  Choices I made that you didn't specify (please confirm or change)
+
+  - Login security: the sign-in token is stored in a cookie the page's
+    JavaScript can't read, and expires after 24 hours. This is safer than
+    storing it in the browser's local storage.
+  - Saving: the server recalculates the result itself. A tampered result from
+    the browser can't be stored.
+  - Calculate button: changing any input after calculating clears the result. A
+    saved or shared result then always matches its inputs.
+  - Accounts: passwords are 8–72 characters with at least one letter and one
+    number. Login and sign-up attempts are rate-limited.
+  - Out of scope for v1: password reset, email verification and a working
+    contact form.
+
+  Open questions (section 13)
+
+  ┌─────┬──────────────────────────────────────────────────┬────────────────┐
+  │  #  │                     Question                     │   My default   │
+  ├─────┼──────────────────────────────────────────────────┼────────────────┤
+  │     │ The hero shows a short calculator entry (choose  │                │
+  │ Q1  │ Even or Itemised, then Start splitting), and the │ As stated      │
+  │     │  full form opens in the modal                    │                │
+  ├─────┼──────────────────────────────────────────────────┼────────────────┤
+  │ Q2  │ Login and Sign Up are separate pages, not modals │ Pages          │
+  ├─────┼──────────────────────────────────────────────────┼────────────────┤
+  │ Q3  │ If a guest calculates and then logs in, their    │ Not kept       │
+  │     │ unsaved result isn't kept                        │                │
+  ├─────┼──────────────────────────────────────────────────┼────────────────┤
+  │ Q4  │ Users can't delete saved calculations in v1      │ No delete      │
+  ├─────┼──────────────────────────────────────────────────┼────────────────┤
+  │ Q5  │ About and Contact Us are sections of the Home    │ Sections       │
+  │     │ page; the nav links scroll to them               │                │
+  ├─────┼──────────────────────────────────────────────────┼────────────────┤
+  │ Q6  │ The hero image is a built-in illustration, not a │ Built-in       │
+  │     │  stock photo                                     │ illustration   │
+  ├─────┼──────────────────────────────────────────────────┼────────────────┤
+  │ Q7  │ History shows all saved entries on one page      │ No pagination  │
+  └─────┴──────────────────────────────────────────────────┴────────────────┘
+
+  Please review the doc and reply with any changes, or "approved". Once you
+  approve, I'll start building in this order: calculation engine and tests,
+  backend and database, frontend, Docker setup, README, then a check against the
+  acceptance criteria.
+
+> <ide_opened_file>The user opened the file
+  c:\Users\DELL\Desktop\tip-and-bill-splitter\src\docs\REQUIREMENTS.md in the
+  IDE. This may or may not be related to the current task.</ide_opened_file>
+
+> Q1: Change. The hero has a calculator entry point. The user chooses Even or
+  Itemised and clicks “Start splitting” to open the full calculator form in a
+  modal.
+
+  Q2: Approved. Login and Sign Up are separate pages.
+
+  Q3: Approved. If a guest calculates and then logs in, the unsaved result is
+  not kept.
+
+  Q4: Approved. Users cannot delete saved calculations in v1.
+
+  Q5: Approved. About and Contact Us are sections on the Home page, and the
+  navigation links scroll to them.
+
+  Q6: Approved. Use a built-in illustration for the hero image; hide it on
+  mobile.
+
+  Q7: Approved. Show all saved calculations on one History page without
+  pagination.
+
+  These decisions are approved. Please proceed with the agreed build order.
+
+● Q1 as you've described it matches what the doc already proposed, so I'll just
+  tighten the wording so it's unambiguous. I'll also move Q1–Q7 into the
+  decision log, then start building.
+
+● Bash(node -v; npm -v; docker --version; docker compose version; git --version)
+  ⎿  (No output)
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 2 lines, removed 10 lines
+      287  
+      288  ---
+      289  
+      290 -## 13. Assumptions & open questions                           
+      290 +## 13. Resolved questions                                     
+      291  
+      292 -| # | Assumption / question | Proposed default |              
+      293 -|---|---|---|                                                 
+      294 -| Q1 | "Calculator in the hero" — the hero shows a short calcu
+          -lator entry (method choice + **Start splitting**); the full fo
+          -rm opens in the modal. | As stated |                          
+      295 -| Q2 | Login and Sign Up are separate pages (not modals). | Pa
+          -ges |                                                         
+      296 -| Q3 | After a guest calculates and then logs in, the unsaved 
+          -result is **not** carried over. | Not carried over |          
+      297 -| Q4 | Users cannot delete saved calculations in v1. | No dele
+          -te |                                                          
+      298 -| Q5 | About and Contact Us are sections of the Home page, rea
+          -ched by the nav links. | Sections |                           
+      299 -| Q6 | Hero image is a bundled illustration (no external stock
+          - photo). | Bundled SVG |                                      
+      300 -| Q7 | History loads all of a user's entries (no pagination) i
+          -n v1. | No pagination |                                       
+      292 +All open questions were resolved on 2026-10-29 (see D17–D23 be
+          +low).                                                         
+      293  
+      294  ---
+      295  
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 7 lines
+      313  | D14 | Guests can share/export unsaved results. |
+      314  | D15 | WhatsApp via `wa.me`; fallback message + Copy text if 
+           blocked; Copy text always available. |
+      315  | D16 | Stack: React + Vite + Ant Design, NestJS + JWT, MySQL,
+            Docker Compose; repo = README.md + src/. |
+      316 +| D17 | The hero contains the calculator entry point: the user
+          + chooses Even or Itemised and clicks **Start splitting**, whic
+          +h opens the full calculator form in a modal. |                
+      317 +| D18 | Login and Sign Up are separate pages. |               
+      318 +| D19 | A guest's unsaved result is not kept after logging in.
+          + |                                                            
+      319 +| D20 | Saved calculations cannot be deleted in v1. |         
+      320 +| D21 | About and Contact Us are sections on the Home page; na
+          +v links scroll to them. |                                     
+      321 +| D22 | Hero image is a built-in illustration, hidden on mobil
+          +e. |                                                          
+      322 +| D23 | History shows all saved calculations on one page, no p
+          +agination. |                                                  
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 1 line, removed 1 line
+      1  # Tip & Bill Splitter — Product Requirements (v1)
+      2  
+      3 -**Status:** Draft for review · **Date:** 2026-10-29 · **Currency
+        -:** USD                                                         
+      3 +**Status:** Approved · **Date:** 2026-10-29 · **Currency:** USD 
+      4  
+      5  ---
+      6  
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 1 line, removed 1 line
+      63  ## 4. Key user flows
+      64  
+      65  ### 4.1 Calculate (guest or logged-in)
+      66 -1. On Home, the user taps **Start splitting** in the hero (choo
+         -sing Even or Itemised).                                        
+      66 +1. In the hero's calculator entry point on Home, the user choos
+         +es **Even** or **Itemised** and clicks **Start splitting**.    
+      67  2. The **calculator modal** opens (with a close button).
+      68  3. The user enters bill amount, tip and the split details, then
+           presses **Calculate**.
+      69  4. If inputs are invalid, errors are shown next to the fields; 
+          no result is produced.
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 1 line, removed 1 line
+      219  
+      220  ## 9. Content
+      221  
+      222 -- **Hero:** headline, one-line value statement, **Start splitt
+          -ing** (Even / Itemised). Right side: bundled illustration of a
+          - group meal (hidden on mobile).                               
+      222 +- **Hero:** headline, one-line value statement, calculator ent
+          +ry point (Even / Itemised choice + **Start splitting**). Right
+          + side: bundled illustration of a group meal (hidden on mobile)
+          +.                                                             
+      223  - **About:** short explanation of what the app does, the two s
+           plit methods and the fair-cents guarantee.
+      224  - **Contact Us:** clearly marked placeholder details (e.g. `su
+           pport@example.com — placeholder`). No real contact details, no
+            form.
+      225  
+
+● Docs updated. Now I'll build the calculation engine in src/shared/calc as
+  dependency-free TypeScript so both the browser and backend can run identical
+  code.
+
+● Write(shared\calc\money.ts)
+  ⎿  Wrote 56 lines to shared\calc\money.ts
+       1 /** Money helpers. All amounts are integer cents (USD); percenta
+         ges are basis points (1% = 100). */
+       2
+       3 const MONEY_RE = /^(\d{1,7})(?:\.(\d{0,2}))?$/;
+       4 const MONEY_FRACTION_ONLY_RE = /^\.(\d{1,2})$/;
+       5 const PERCENT_RE = /^(\d{1,3})(?:\.(\d{0,2}))?$/;
+       6
+       7 /**
+       8  * Parses a user-typed dollar amount ("12", "12.5", "$1,234.56",
+          ".99") into cents.
+     … +48 lines (ctrl+o to expand)
+
+● Write(shared\calc\allocate.ts)
+  ⎿  Wrote 82 lines to shared\calc\allocate.ts
+       1 /**
+       2  * Fair cent allocation (largest-remainder method).
+       3  *
+       4  * Weights are BigInt so that shares stay exact even for items s
+         plit between many
+       5  * people (e.g. a $10 item shared by 7) — nothing is rounded unt
+         il the final cent.
+       6  */
+       7
+       8 export interface Allocation {
+     … +74 lines (ctrl+o to expand)
+● Write(shared\calc\calculate.ts)
+  ⎿  Wrote 267 lines to shared\calc\calculate.ts
+       1 import { allocateBillAndTip } from './allocate';
+       2 import { formatCents } from './money';
+       3
+       4 export const LIMITS = {
+       5   maxAmountCents: 9_999_999, // $99,999.99
+       6   maxPercentBasisPoints: 10_000, // 100%
+       7   maxPeople: 50,
+       8   maxItems: 100,
+       9   personNameMax: 30,
+      10   itemNameMax: 40,
+     … +257 lines (ctrl+o to expand)
+
+● Write(shared\calc\index.ts)
+  ⎿  Wrote 3 lines to shared\calc\index.ts
+      1 export * from './money';
+      2 export * from './allocate';
+      3 export * from './calculate';
+
+● Running the engine tests, covering the acceptance-criteria examples, edge
+  cases, and a randomized check across thousands of inputs to confirm shares
+  always sum exactly and stay within 1¢ of their exact value.
+
+● Write(shared\calc\calc.spec.ts)
+  ⎿  Wrote 262 lines to shared\calc\calc.spec.ts
+       1 import {
+       2   allocate,
+       3   calculate,
+       4   CalculationInput,
+       5   CalculationResult,
+       6   formatBasisPoints,
+       7   formatCents,
+       8   ItemisedInput,
+       9   parseMoneyToCents,
+      10   parsePercentToBasisPoints,
+     … +252 lines (ctrl+o to expand)
+
+● Next, the backend. I'll scaffold it and install its dependencies so I can run
+  the engine tests.
+
+● Write(backend\package.json)
+  ⎿  Wrote 36 lines to backend\package.json
+       1 {
+       2   "name": "tip-bill-splitter-backend",
+       3   "version": "1.0.0",
+       4   "private": true,
+       5   "description": "NestJS API for the Tip & Bill Splitter",
+       6   "scripts": {
+       7     "build": "nest build",
+       8     "start": "node dist/backend/src/main.js",
+       9     "start:dev": "nest start --watch",
+      10     "test": "jest",
+     … +26 lines (ctrl+o to expand)
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/backend" && npm
+      install @nestjs/common@^11 @nestjs/core@^11 @nestjs/platform-express@^11
+      @nestjs/jwt@^11 @ne…)
+  ⎿  (No output)
+  ⎿  (timeout 10m)
+
+● Write(backend\tsconfig.json)
+  ⎿  Wrote 26 lines to backend\tsconfig.json
+       1 {
+       2   "compilerOptions": {
+       3     "module": "commonjs",
+       4     "target": "ES2022",
+       5     "lib": ["ES2022"],
+       6     "declaration": false,
+       7     "removeComments": true,
+       8     "emitDecoratorMetadata": true,
+       9     "experimentalDecorators": true,
+      10     "useDefineForClassFields": false,
+     … +16 lines (ctrl+o to expand)
+
+● Write(backend\tsconfig.build.json)
+  ⎿  Wrote 9 lines to backend\tsconfig.build.json
+      1 {
+      2   "extends": "./tsconfig.json",
+      3   "compilerOptions": {
+      4     "incremental": false,
+      5     "types": ["node"]
+      6   },
+      7   "include": ["src/**/*", "../shared/**/*"],
+      8   "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
+      9 }
+
+● Write(backend\nest-cli.json)
+  ⎿  Wrote 10 lines to backend\nest-cli.json
+       1 {
+       2   "$schema": "https://json.schemastore.org/nest-cli",
+       3   "collection": "@nestjs/schematics",
+       4   "sourceRoot": "src",
+       5   "entryFile": "backend/src/main",
+       6   "compilerOptions": {
+       7     "tsConfigPath": "tsconfig.build.json",
+       8     "deleteOutDir": true
+       9   }
+      10 }
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/backend" && npx jest
+      ../shared 2>&1 | tail -60)
+  ⎿  (No output)
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/backend" && mkdir -p
+      src test && npx jest ../shared 2>&1 | tail -60)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● All 36 tests pass, including 6,000 randomised inputs. The random checks take
+  about a minute because they call expect almost a million times. I'll batch
+  those assertions so they run faster.
+
+● Update(shared\calc\calc.spec.ts)
+  ⎿  Added 3 lines, removed 2 lines
+      226        input.items.forEach((item) => item.assignees.forEach((p)
+            => (weights[p] += (item.priceCents * denom) / item.assignees.
+           length)));
+      227      }
+      228      const W = BigInt(weights.reduce((a, b) => a + b, 0));
+      229 +    const violations: string[] = [];                          
+      230      r.shares.forEach((s, i) => {
+      231        const w = BigInt(weights[i]);
+      232        for (const [share, amount] of [
+     ...
+      234          [s.tipCents, r.tipCents],
+      235          [s.totalCents, r.totalCents],
+      236        ]) {
+      236 -        expect(share).toBeGreaterThanOrEqual(0);              
+      237          const diff = BigInt(share) * W - BigInt(amount) * w; /
+           / (share − exact) × W
+      238 -        expect(diff < W && diff > -W).toBe(true);             
+      238 +        if (share < 0 || diff >= W || diff <= -W) violations.p
+          +ush(`${s.name}: ${share} of ${amount}`);                      
+      239        }
+      240      });
+      241 +    if (violations.length) throw new Error(`${JSON.stringify(i
+          +nput)} -> ${violations.join(', ')}`);                         
+      242    }
+      243  
+      244    it('even split', () => {
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/backend" && npx jest
+      ../shared 2>&1 | tail -12)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● The engine now picks bill shares so the bill, tip, and total all stay accurate
+  to within 1¢, fixing a rare 2¢ rounding gap from the old split-then-subtract
+  approach. I'll note this refinement in the doc.
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 1 line, removed 1 line
+      126    3. Give the remaining cents, one each, to the people with th
+           e largest fractional remainders.
+      127    4. **Ties go to the first-listed person.**
+      128    No one is ever more than 1¢ from their exact share; same inp
+           uts always give the same output.
+      129 -- **Order:** allocate G (totals) and T (tip shares) independen
+          -tly using the rule above; `bill share = total − tip share`.   
+      129 +- **Order:** allocate G (totals) using the rule above. Then ch
+          +oose each person's bill share so that it **and** the tip share
+          + (`total − bill share`) are each within 1¢ of their exact valu
+          +es, giving spare cents to the largest remainders (ties to the 
+          +first-listed person). This guarantees all three columns add up
+          + exactly and every figure is within 1¢. (Subtracting an indepe
+          +ndently rounded tip could leave a bill share 2¢ off in rare ca
+          +ses.)                                                         
+      130  
+      131  ### 6.2 Even split
+      132  - Each person's exact share is `G / N` (and `T / N` for tip).
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 1 line, removed 1 line
+      275  - AC-12 API: history requests without a valid token → 401; req
+           uests for another user's calculation → 404.
+      276  - AC-13 Stored passwords are bcrypt hashes.
+      277  - AC-14 Saved calculations are read-only; "Edit a copy" saves 
+           a new entry and leaves the original unchanged.
+      278 -- AC-15 The backend stores its own recalculated result, even i
+          -f the client sends a different one.                           
+      278 +- AC-15 The save API accepts inputs only (a request containing
+          + a `result` field is rejected); the stored result is always ca
+          +lculated by the backend.                                      
+      279  
+      280  **Sharing & layout**
+      281  - AC-16 WhatsApp, Copy text, Image and PDF work from both the 
+           calculator result and History details, for guests where applic
+           able.
+
+● Now the backend source: config, the database entities and migration, auth
+  (signup, login, logout, current user), and the calculations API with
+  server-side recalculation and per-user access.
+
+● Write(backend\src\config.ts)
+  ⎿  Wrote 44 lines to backend\src\config.ts
+       1 import { Global, Module } from '@nestjs/common';
+       2
+       3 export const APP_CONFIG = Symbol('APP_CONFIG');
+       4
+       5 export interface AppConfig {
+       6   port: number;
+       7   db: { host: string; port: number; username: string; password:
+         string; database: string };
+       8   jwtSecret: string;
+       9   /** Session lifetime; used for both the JWT and the cookie. */
+     … +35 lines (ctrl+o to expand)
+
+● Write(backend\src\users\user.entity.ts)
+  ⎿  Wrote 29 lines to backend\src\users\user.entity.ts
+      1 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn
+         } from 'typeorm';
+      2
+      3 @Entity('users')
+      4 export class User {
+      5   @PrimaryGeneratedColumn()
+      6   id: number;
+      7
+      8   @Column({ type: 'varchar', length: 50 })
+      9   name: string;
+     … +20 lines (ctrl+o to expand)
+
+● Write(backend\src\calculations\calculation.entity.ts)
+  ⎿  Wrote 34 lines to backend\src\calculations\calculation.entity.ts
+      1 import { Column, CreateDateColumn, Entity, Index, PrimaryGenerate
+        dColumn } from 'typeorm';
+      2 import type { CalculationInput, CalculationResult, SplitMethod }
+        from '../../../shared/calc';
+      3
+      4 /** A saved, read-only snapshot of a calculation. */
+      5 @Entity('calculations')
+      6 @Index('IDX_calculations_user_created', ['userId', 'createdAt'])
+      7 export class Calculation {
+      8   @PrimaryGeneratedColumn('uuid')
+     … +26 lines (ctrl+o to expand)
+
+● Write(backend\src\database\migrations\1761700000000-init.ts)  ⎿  Wrote 40 lines to
+     backend\src\database\migrations\1761700000000-init.ts
+       1 import { MigrationInterface, QueryRunner } from 'typeorm';
+       2
+       3 export class Init1761700000000 implements MigrationInterface {
+       4   name = 'Init1761700000000';
+       5
+       6   async up(queryRunner: QueryRunner): Promise<void> {
+       7     await queryRunner.query(`
+       8       CREATE TABLE users (
+       9         id INT NOT NULL AUTO_INCREMENT,
+      10         name VARCHAR(50) NOT NULL,
+     … +30 lines (ctrl+o to expand)
+
+● Write(backend\src\auth\auth.dto.ts)
+  ⎿  Wrote 34 lines to backend\src\auth\auth.dto.ts
+       1 import { Transform } from 'class-transformer';
+       2 import { IsEmail, IsString, Length, Matches, MaxLength } from 'c
+         lass-validator';
+       3
+       4 const trim = ({ value }: { value: unknown }) => (typeof value ==
+         = 'string' ? value.trim() : value);
+       5 const normaliseEmail = ({ value }: { value: unknown }) => (typeo
+         f value === 'string' ? value.trim().toLowerCase() : value);
+       6
+       7 export class SignupDto {
+     … +27 lines (ctrl+o to expand)
+
+● Write(backend\src\auth\auth.service.ts)
+  ⎿  Wrote 75 lines to backend\src\auth\auth.service.ts
+       1 import { BadRequestException, ConflictException, Inject, Injecta
+         ble, UnauthorizedException } from '@nestjs/common';
+       2 import { JwtService } from '@nestjs/jwt';
+       3 import { InjectRepository } from '@nestjs/typeorm';
+       4 import * as bcrypt from 'bcryptjs';
+       5 import { QueryFailedError, Repository } from 'typeorm';
+       6 import { APP_CONFIG, AppConfig } from '../config';
+       7 import { PublicUser, toPublicUser, User } from '../users/user.en
+         tity';
+       8 import { LoginDto, SignupDto } from './auth.dto';
+     … +67 lines (ctrl+o to expand)
+
+● Write(backend\src\auth\jwt-auth.guard.ts)
+  ⎿  Wrote 26 lines to backend\src\auth\jwt-auth.guard.ts
+       1 import { CanActivate, createParamDecorator, ExecutionContext, In
+         jectable, UnauthorizedException } from '@nestjs/common';
+       2 import type { Request } from 'express';
+       3 import { PublicUser } from '../users/user.entity';
+       4 import { AuthService } from './auth.service';
+       5
+       6 export const SESSION_COOKIE = 'tbs_session';
+       7
+       8 export type AuthenticatedRequest = Request & { user: PublicUser
+         };
+     … +18 lines (ctrl+o to expand)
+
+● Write(backend\src\auth\auth.controller.ts)
+  ⎿  Wrote 57 lines to backend\src\auth\auth.controller.ts
+       1 import { Body, Controller, Get, HttpCode, Inject, Post, Req, Res
+          } from '@nestjs/common';
+       2 import { Throttle } from '@nestjs/throttler';
+       3 import type { CookieOptions, Request, Response } from 'express';
+       4 import { APP_CONFIG, AppConfig } from '../config';
+       5 import { PublicUser, toPublicUser, User } from '../users/user.en
+         tity';
+       6 import { LoginDto, SignupDto } from './auth.dto';
+       7 import { AuthService } from './auth.service';
+       8 import { SESSION_COOKIE } from './jwt-auth.guard';
+     … +49 lines (ctrl+o to expand)
+
+● Write(backend\src\auth\auth.module.ts)
+  ⎿  Wrote 22 lines to backend\src\auth\auth.module.ts
+       1 import { Module } from '@nestjs/common';
+       2 import { JwtModule } from '@nestjs/jwt';
+       3 import { TypeOrmModule } from '@nestjs/typeorm';
+       4 import { APP_CONFIG, AppConfig } from '../config';
+       5 import { User } from '../users/user.entity';
+       6 import { AuthController } from './auth.controller';
+       7 import { AuthService } from './auth.service';
+       8 import { JwtAuthGuard } from './jwt-auth.guard';
+       9
+      10 @Module({
+     … +12 lines (ctrl+o to expand)
+
+● Update(backend\src\auth\auth.service.ts)
+  ⎿  Added 1 line, removed 1 line
+      65    async userFromToken(token: string | undefined): Promise<Publi
+          cUser | null> {
+      66      if (!token) return null;
+      67      try {
+      68 -      const payload = await this.jwt.verifyAsync<SessionPayload
+         ->(token);                                                      
+      68 +      const payload = await this.jwt.verifyAsync<SessionPayload
+         +>(token, { algorithms: ['HS256'] });                           
+      69        const user = await this.users.findOneBy({ id: payload.sub
+           });
+      70        return user ? toPublicUser(user) : null;
+      71      } catch {
+
+● Write(backend\src\calculations\calculations.dto.ts)
+  ⎿  Wrote 88 lines to backend\src\calculations\calculations.dto.ts
+       1 import { Type } from 'class-transformer';
+       2 import {
+       3   ArrayMaxSize,
+       4   IsArray,
+       5   IsIn,
+       6   IsInt,
+       7   IsObject,
+       8   IsOptional,
+       9   IsString,
+      10   MaxLength,
+     … +78 lines (ctrl+o to expand)
+
+● Write(backend\src\calculations\calculations.service.ts)
+  ⎿  Wrote 50 lines to backend\src\calculations\calculations.service.ts
+       1 import { BadRequestException, Injectable, NotFoundException } fr
+         om '@nestjs/common';
+       2 import { InjectRepository } from '@nestjs/typeorm';
+       3 import { Repository } from 'typeorm';
+       4 import { calculate, CalculationInput } from '../../../shared/cal
+         c';
+       5 import { Calculation } from './calculation.entity';
+       6 import { SaveCalculationDto } from './calculations.dto';
+       7
+       8 export type CalculationSummary = Pick<Calculation, 'id' | 'title
+     … +43 lines (~2 KB) (ctrl+o to expand)
+
+● Write(backend\src\calculations\calculations.controller.ts)
+  ⎿  Wrote 26 lines to backend\src\calculations\calculations.controller.ts
+       1 import { Body, Controller, Get, Param, Post, UseGuards } from '@
+         nestjs/common';
+       2 import { CurrentUser, JwtAuthGuard } from '../auth/jwt-auth.guar
+         d';
+       3 import { PublicUser } from '../users/user.entity';
+       4 import { SaveCalculationDto } from './calculations.dto';
+       5 import { CalculationsService } from './calculations.service';
+       6
+       7 @Controller('calculations')
+       8 @UseGuards(JwtAuthGuard)
+     … +18 lines (ctrl+o to expand)
+
+● Write(backend\src\calculations\calculations.module.ts)
+  ⎿  Wrote 13 lines to backend\src\calculations\calculations.module.ts
+       1 import { Module } from '@nestjs/common';
+       2 import { TypeOrmModule } from '@nestjs/typeorm';
+       3 import { AuthModule } from '../auth/auth.module';
+       4 import { Calculation } from './calculation.entity';
+       5 import { CalculationsController } from './calculations.controlle
+         r';
+       6 import { CalculationsService } from './calculations.service';
+       7
+       8 @Module({
+       9   imports: [TypeOrmModule.forFeature([Calculation]), AuthModule]
+     … +5 lines (ctrl+o to expand)
+
+● Write(backend\src\app.module.ts)
+  ⎿  Wrote 47 lines to backend\src\app.module.ts
+       1 import { Controller, Get, Module } from '@nestjs/common';
+       2 import { APP_GUARD } from '@nestjs/core';
+       3 import { SkipThrottle, ThrottlerGuard, ThrottlerModule } from '@
+         nestjs/throttler';
+       4 import { TypeOrmModule } from '@nestjs/typeorm';
+       5 import { AuthModule } from './auth/auth.module';
+       6 import { Calculation } from './calculations/calculation.entity';
+       7 import { CalculationsModule } from './calculations/calculations.
+         module';
+       8 import { APP_CONFIG, AppConfig, AppConfigModule } from './config
+     … +40 lines (~1 KB) (ctrl+o to expand)
+
+● Write(backend\src\app.setup.ts)
+  ⎿  Wrote 19 lines to backend\src\app.setup.ts
+       1 import { ValidationPipe } from '@nestjs/common';
+       2 import { NestExpressApplication } from '@nestjs/platform-express
+         ';
+       3 import cookieParser from 'cookie-parser';
+       4 import helmet from 'helmet';
+       5
+       6 /** Shared by main.ts and the e2e tests so both run the app exac
+         tly the same way. */
+       7 export function configureApp(app: NestExpressApplication): void
+         {
+     … +12 lines (ctrl+o to expand)
+
+● Write(backend\src\main.ts)
+  ⎿  Wrote 16 lines to backend\src\main.ts
+       1 import 'reflect-metadata';
+       2 import { NestFactory } from '@nestjs/core';
+       3 import { NestExpressApplication } from '@nestjs/platform-express
+         ';
+       4 import { AppModule } from './app.module';
+       5 import { configureApp } from './app.setup';
+       6 import { loadConfig } from './config';
+       7
+       8 async function bootstrap() {
+       9   const config = loadConfig(); // fail fast on missing/weak conf
+     … +8 lines (ctrl+o to expand)
+
+● Now I'll run the API tests, which exercise the real controllers, guards, and
+  validation against an in-memory database stand-in to verify 401/404 handling,
+  bcrypt hashing, and server-side result correctness.
+
+● Write(backend\test\api.e2e-spec.ts)
+  ⎿  Wrote 215 lines to backend\test\api.e2e-spec.ts
+       1 import { INestApplication } from '@nestjs/common';
+       2 import { APP_GUARD } from '@nestjs/core';
+       3 import { NestExpressApplication } from '@nestjs/platform-express
+         ';
+       4 import { Test } from '@nestjs/testing';
+       5 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttl
+         er';
+       6 import { getRepositoryToken } from '@nestjs/typeorm';
+       7 import { randomUUID } from 'crypto';
+       8 import request from 'supertest';
+     … +207 lines (ctrl+o to expand)
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/backend" && npx tsc
+      -p tsconfig.json --noEmit 2>&1 | head -30 && npx jest test 2>&1 | tail
+      -40)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● Typecheck is clean and all 12 API tests pass. Next I'll check that the
+  production build puts the shared engine where the compiled backend expects it.
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/backend" && npx nest
+      build 2>&1 | tail -5; find dist -name "*.js" | grep -v map | head -30;
+      node -e "require…)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● The layout works, but the build is also picking up the shared test file. I'll
+  exclude it.
+
+● Update(backend\tsconfig.build.json)
+  ⎿  Added 1 line, removed 1 line
+      5      "types": ["node"]
+      6    },
+      7    "include": ["src/**/*", "../shared/**/*"],
+      8 -  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]   
+      8 +  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts", ".
+        +./shared/**/*.spec.ts"]                                         
+      9  }
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/backend" && npx nest
+      build 2>&1 | tail -5; ls dist/shared/calc)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/backend" && npx nest
+      build 2>&1 | tail -5; ls dist/shared/calc)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● The backend builds and tests cleanly. Now the frontend: I'll scaffold React,
+  Vite and Ant Design.
+
+● Write(frontend\package.json)
+  ⎿  Wrote 12 lines to frontend\package.json
+       1 {
+       2   "name": "tip-bill-splitter-frontend",
+       3   "version": "1.0.0",
+       4   "private": true,
+       5   "type": "module",
+       6   "scripts": {
+       7     "dev": "vite",
+       8     "build": "tsc -b && vite build",
+       9     "preview": "vite preview",
+      10     "test": "vitest run"
+     … +2 lines (ctrl+o to expand)
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && npm
+      install react@^18.3 react-dom@^18.3 react-router-dom@^6 antd@^5
+      @ant-design/icons@^5 html-t…)
+  ⎿  (No output)
+  ⎿  (timeout 10m)
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && node -e
+      "
+      const p=require('./package.json');…)
+  ⎿  (No output)
+
+● Write(frontend\vite.config.ts)
+  ⎿  Wrote 24 lines to frontend\vite.config.ts
+       1 import react from '@vitejs/plugin-react';
+       2 import { fileURLToPath } from 'node:url';
+       3 import { defineConfig } from 'vitest/config';
+       4
+       5 export default defineConfig({
+       6   plugins: [react()],
+       7   resolve: {
+       8     // The calculation engine is shared with the backend (src/sh
+         ared).
+       9     alias: { '@shared': fileURLToPath(new URL('../shared', impor
+     … +16 lines (ctrl+o to expand)
+
+● Write(frontend\tsconfig.json)
+  ⎿  Wrote 21 lines to frontend\tsconfig.json
+       1 {
+       2   "compilerOptions": {
+       3     "target": "ES2022",
+       4     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+       5     "module": "ESNext",
+       6     "moduleResolution": "Bundler",
+       7     "jsx": "react-jsx",
+       8     "strict": true,
+       9     "noUnusedLocals": true,
+      10     "noUnusedParameters": true,
+     … +11 lines (ctrl+o to expand)
+
+● Write(frontend\index.html)
+  ⎿  Wrote 15 lines to frontend\index.html
+       1 <!doctype html>
+       2 <html lang="en">
+       3   <head>
+       4     <meta charset="UTF-8" />
+       5     <meta name="viewport" content="width=device-width, initial-s
+         cale=1.0" />
+       6     <meta name="description" content="Split restaurant bills and
+          tips fairly, down to the cent." />
+       7     <meta name="theme-color" content="#0f766e" />
+       8     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+     … +7 lines (ctrl+o to expand)
+
+● Write(frontend\public\favicon.svg)
+  ⎿  Wrote 1 line to frontend\public\favicon.svg
+      1 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect
+         width="64" height="64" rx="14" fill="#0f766e"/><path d="M20 14h2
+        4v36l-4-3-4 3-4-3-4 3-4-3-4 3z" fill="#fff"/><path d="M26 24h12M2
+        6 30h12M26 36h8" stroke="#0f766e" stroke-width="3" stroke-linecap
+        ="round"/></svg>
+
+● Now the frontend logic modules: the API client, form-to-input conversion,
+  share text, date grouping and file export.
+
+● Write(frontend\src\lib\api.ts)
+  ⎿  Wrote 76 lines to frontend\src\lib\api.ts
+       1 import type { CalculationInput, CalculationResult, SplitMethod }
+          from '@shared/calc';
+       2
+       3 export interface User {
+       4   id: number;
+       5   name: string;
+       6   email: string;
+       7 }
+       8
+       9 export interface SavedCalculationSummary {
+     … +67 lines (ctrl+o to expand)
+
+● Write(frontend\src\lib\calculatorForm.ts)
+  ⎿  Wrote 149 lines to frontend\src\lib\calculatorForm.ts
+       1 import {
+       2   basisPointsToInput,
+       3   calculate,
+       4   CalculationInput,
+       5   CalculationResult,
+       6   centsToInput,
+       7   parseMoneyToCents,
+       8   parsePercentToBasisPoints,
+       9   SplitMethod,
+      10   TipInput,
+     … +139 lines (ctrl+o to expand)
+
+● Write(frontend\src\lib\shareText.ts)
+  ⎿  Wrote 25 lines to frontend\src\lib\shareText.ts
+       1 import { CalculationResult, formatBasisPoints, formatCents } fro
+         m '@shared/calc';
+       2
+       3 export const methodLabel = (method: CalculationResult['method'])
+          => (method === 'even' ? 'Even split' : 'Itemised split');
+       4
+       5 export const tipLabel = (result: CalculationResult) =>
+       6   result.tip.type === 'percent' ? `Tip (${formatBasisPoints(resu
+         lt.tip.basisPoints)})` : 'Tip (fixed)';
+       7
+     … +18 lines (ctrl+o to expand)
+
+● Write(frontend\src\lib\dates.ts)
+  ⎿  Wrote 40 lines to frontend\src\lib\dates.ts
+       1 export interface DayGroup<T> {
+       2   key: string;
+       3   label: string;
+       4   items: T[];
+       5 }
+       6
+       7 const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-
+         ${d.getDate()}`;
+       8
+       9 /** Groups items by local calendar day, newest first: "Today", "
+     … +32 lines (~1 KB) (ctrl+o to expand)
+
+● Write(frontend\src\lib\exportFiles.ts)
+  ⎿  Wrote 102 lines to frontend\src\lib\exportFiles.ts
+       1 import { CalculationResult, formatCents } from '@shared/calc';
+       2 import { exportFileName, methodLabel, tipLabel } from './shareTe
+         xt';
+       3
+       4 function download(href: string, fileName: string): void {
+       5   const link = document.createElement('a');
+       6   link.href = href;
+       7   link.download = fileName;
+       8   document.body.appendChild(link);
+       9   link.click();
+     … +93 lines (ctrl+o to expand)
+
+● Update(frontend\src\lib\calculatorForm.ts)
+  ⎿  Added 1 line, removed 1 line
+      73    if (input.tip.type === 'fixed') {
+      74      state.tipMode = 'fixed';
+      75      state.fixedTip = centsToInput(input.tip.cents);
+      76 -  } else if ([0, 1000, 1500, 1800, 2000].includes(input.tip.bas
+         -isPoints)) {                                                   
+      76 +  } else if ((TIP_PRESETS_BASIS_POINTS as readonly number[]).in
+         +cludes(input.tip.basisPoints)) {                               
+      77      state.presetBasisPoints = input.tip.basisPoints;
+      78    } else {
+      79      state.tipMode = 'custom';
+
+● Update(frontend\src\lib\calculatorForm.ts)
+  ⎿  Added 1 line
+       7    parseMoneyToCents,
+       8    parsePercentToBasisPoints,
+       9    SplitMethod,
+      10 +  TIP_PRESETS_BASIS_POINTS,                                    
+      11    TipInput,
+      12  } from '@shared/calc';
+      13  
+
+● Write(frontend\src\auth\AuthContext.tsx)
+  ⎿  Wrote 62 lines to frontend\src\auth\AuthContext.tsx
+       1 import { App } from 'antd';
+       2 import { createContext, ReactNode, useCallback, useContext, useE
+         ffect, useMemo, useState } from 'react';
+       3 import { useLocation, useNavigate } from 'react-router-dom';
+       4 import { api, setSessionExpiredHandler, User } from '../lib/api'
+         ;
+       5
+       6 export interface AuthState {
+       7   user: User | null;
+       8   /** True until the initial session check finishes. */
+     … +54 lines (ctrl+o to expand)
+
+● Now the UI components. First the result view and the share and save actions:
+
+● Write(frontend\src\components\ResultView.tsx)
+  ⎿  Wrote 115 lines to frontend\src\components\ResultView.tsx
+       1 import { Alert, Collapse, Table, Typography } from 'antd';
+       2 import { CalculationInput, CalculationResult, formatCents, Perso
+         nShare } from '@shared/calc';
+       3 import { forwardRef } from 'react';
+       4 import { formatDateTime } from '../lib/dates';
+       5 import { methodLabel, tipLabel } from '../lib/shareText';
+       6
+       7 interface ResultViewProps {
+       8   result: CalculationResult;
+       9   input: CalculationInput;
+     … +106 lines (ctrl+o to expand)
+
+● Write(frontend\src\components\ShareActions.tsx)
+  ⎿  Wrote 108 lines to frontend\src\components\ShareActions.tsx
+       1 import { CopyOutlined, FilePdfOutlined, PictureOutlined, WhatsAp
+         pOutlined } from '@ant-design/icons';
+       2 import { Alert, App, Button, Input, Modal, Space } from 'antd';
+       3 import { CalculationResult } from '@shared/calc';
+       4 import { RefObject, useState } from 'react';
+       5 import { downloadImage, downloadPdf } from '../lib/exportFiles';
+       6 import { buildShareText, whatsappUrl } from '../lib/shareText';
+       7
+       8 interface ShareActionsProps {
+       9   result: CalculationResult;
+     … +99 lines (ctrl+o to expand)
+
+● Write(frontend\src\components\SaveAction.tsx)  ⎿  Wrote 77 lines to frontend\src\components\SaveAction.tsx
+       1 import { CheckOutlined, SaveOutlined } from '@ant-design/icons';
+       2 import { App, Button, Input, Modal, Typography } from 'antd';
+       3 import { CalculationInput, LIMITS } from '@shared/calc';
+       4 import { useState } from 'react';
+       5 import { Link } from 'react-router-dom';
+       6 import { useAuth } from '../auth/AuthContext';
+       7 import { api, ApiError, SavedCalculation } from '../lib/api';
+       8
+       9 interface SaveActionProps {
+      10   input: CalculationInput;
+     … +67 lines (ctrl+o to expand)
+
+● Now the calculator modal, the core of the app:
+
+● Write(frontend\src\components\CalculatorModal.tsx)
+  ⎿  Wrote 323 lines to frontend\src\components\CalculatorModal.tsx
+       1 import { CalculatorOutlined, DeleteOutlined, PlusOutlined } from
+          '@ant-design/icons';
+       2 import { Alert, Button, Card, Divider, Form, Input, InputNumber,
+          Modal, Radio, Segmented, Select, Space, Typography } from 'antd
+         ';
+       3 import { CalculationInput, CalculationResult, formatBasisPoints,
+          LIMITS, SplitMethod, TIP_PRESETS_BASIS_POINTS } from '@shared/c
+         alc';
+       4 import { useEffect, useRef, useState } from 'react';
+       5 import { SavedCalculation } from '../lib/api';
+     … +318 lines (ctrl+o to expand)
+
+● Now the layout, header and pages:
+
+● Write(frontend\src\components\AppHeader.tsx)
+  ⎿  Wrote 105 lines to frontend\src\components\AppHeader.tsx
+       1 import { DownOutlined, LogoutOutlined, MenuOutlined, UserOutline
+         d } from '@ant-design/icons';
+       2 import { App, Button, Drawer, Dropdown, Grid, Menu, Space } from
+          'antd';
+       3 import { useState } from 'react';
+       4 import { Link, useLocation, useNavigate } from 'react-router-dom
+         ';
+       5 import { useAuth } from '../auth/AuthContext';
+       6
+       7 function useSelectedKey(): string {
+     … +98 lines (ctrl+o to expand)
+
+● Write(frontend\src\components\HeroIllustration.tsx)
+  ⎿  Wrote 58 lines to frontend\src\components\HeroIllustration.tsx
+       1 /** Built-in hero illustration: friends' plates around a table w
+         ith the bill and a tip badge. */
+       2 export function HeroIllustration() {
+       3   return (
+       4     <svg viewBox="0 0 480 400" role="img" aria-labelledby="hero-
+         art-title" className="hero-illustration">
+       5       <title id="hero-art-title">Friends sharing a meal with the
+          bill split between them</title>
+       6       <ellipse cx="240" cy="210" rx="210" ry="150" fill="#ccebe6
+         " />
+     … +52 lines (ctrl+o to expand)
+
+● Write(frontend\src\pages\HomePage.tsx)
+  ⎿  Wrote 136 lines to frontend\src\pages\HomePage.tsx
+       1 import { ArrowRightOutlined, CalculatorOutlined, EnvironmentOutl
+         ined, MailOutlined, PhoneOutlined, TeamOutlined, UnorderedListOu
+         tlined } from '@ant-design/icons';
+       2 import { Button, Card, Col, Radio, Row, Tag, Typography } from '
+         antd';
+       3 import { SplitMethod } from '@shared/calc';
+       4 import { useEffect, useState } from 'react';
+       5 import { useLocation } from 'react-router-dom';
+       6 import { CalculatorModal } from '../components/CalculatorModal';
+       7 import { HeroIllustration } from '../components/HeroIllustration
+     … +130 lines (~6 KB) (ctrl+o to expand)
+
+● Update(frontend\src\pages\HomePage.tsx)
+  ⎿  Added 1 line, removed 1 line
+      124                <EnvironmentOutlined /> 123 Example Street, Anyt
+           own, USA
+      125              </li>
+      126            </ul>
+      127 -          <Button type="link" href="#top" onClick={() => windo
+          -w.scrollTo({ top: 0, behavior: 'smooth' })} icon={<ArrowRightO
+          -utlined rotate={-90} />}>                                     
+      127 +          <Button type="link" onClick={() => window.scrollTo({
+          + top: 0, behavior: 'smooth' })} icon={<ArrowRightOutlined rota
+          +te={-90} />}>                                                 
+      128              Back to the calculator
+      129            </Button>
+      130          </div>
+
+● Write(frontend\src\pages\HistoryPage.tsx)
+  ⎿  Wrote 177 lines to frontend\src\pages\HistoryPage.tsx
+       1 import { CalculatorOutlined, CopyOutlined, HistoryOutlined } fro
+         m '@ant-design/icons';
+       2 import { Alert, Button, Empty, List, Modal, Result, Skeleton, Sp
+         ace, Spin, Typography } from 'antd';
+       3 import { CalculationInput, formatCents } from '@shared/calc';
+       4 import { useCallback, useEffect, useMemo, useRef, useState } fro
+         m 'react';
+       5 import { CalculatorModal } from '../components/CalculatorModal';
+       6 import { ResultView } from '../components/ResultView';
+       7 import { ShareActions } from '../components/ShareActions';
+     … +170 lines (ctrl+o to expand)
+
+● Write(frontend\src\pages\AuthPages.tsx)
+  ⎿  Wrote 181 lines to frontend\src\pages\AuthPages.tsx
+       1 import { LockOutlined, MailOutlined, UserOutlined } from '@ant-d
+         esign/icons';
+       2 import { Alert, App, Button, Card, Form, Input, Typography } fro
+         m 'antd';
+       3 import { useState } from 'react';
+       4 import { Link, Navigate, useLocation, useNavigate } from 'react-
+         router-dom';
+       5 import { useAuth } from '../auth/AuthContext';
+       6 import { ApiError } from '../lib/api';
+       7
+     … +174 lines (ctrl+o to expand)
+
+● Write(frontend\src\App.tsx)
+  ⎿  Wrote 69 lines to frontend\src\App.tsx
+       1 import { Button, Result, Spin } from 'antd';
+       2 import { ReactNode } from 'react';
+       3 import { Navigate, Outlet, Route, Routes, useLocation, useNaviga
+         te } from 'react-router-dom';
+       4 import { useAuth } from './auth/AuthContext';
+       5 import { AppHeader } from './components/AppHeader';
+       6 import { LoginPage, SignupPage } from './pages/AuthPages';
+       7 import { HistoryPage } from './pages/HistoryPage';
+       8 import { HomePage } from './pages/HomePage';
+       9
+     … +60 lines (ctrl+o to expand)
+
+● Write(frontend\src\main.tsx)
+  ⎿  Wrote 32 lines to frontend\src\main.tsx
+       1 import { App as AntApp, ConfigProvider } from 'antd';
+       2 import enUS from 'antd/locale/en_US';
+       3 import React from 'react';
+       4 import ReactDOM from 'react-dom/client';
+       5 import { BrowserRouter } from 'react-router-dom';
+       6 import App from './App';
+       7 import { AuthProvider } from './auth/AuthContext';
+       8 import './styles.css';
+       9
+      10 const theme = {
+     … +22 lines (ctrl+o to expand)
+
+● Write(frontend\src\styles.css)
+  ⎿  Wrote 456 lines to frontend\src\styles.css
+       1 :root {
+       2   --brand: #0f766e;
+       3   --brand-dark: #115e59;
+       4   --brand-soft: #e6f4f1;
+       5   --ink: #0f172a;
+       6   --muted: #475569;
+       7   --surface: #ffffff;
+       8   --page: #f6f8f7;
+       9   --line: #e2e8f0;
+      10 }
+     … +446 lines (ctrl+o to expand)
+
+● Update(frontend\src\main.tsx)
+  ⎿  Added 1 line, removed 1 line
+      12      colorPrimary: '#0f766e',
+      13      colorLink: '#0f766e',
+      14      borderRadius: 10,
+      15 -    fontFamily: "'Inter', system-ui, -apple-system, 'Segoe UI',
+         - Roboto, sans-serif",                                          
+      15 +    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, 
+         +sans-serif",                                                   
+      16      controlHeightLG: 46,
+      17    },
+      18  };
+
+● Now the frontend tests, then a typecheck:
+
+● Write(frontend\src\test\setup.ts)
+  ⎿  Wrote 27 lines to frontend\src\test\setup.ts
+       1 import '@testing-library/jest-dom/vitest';
+       2
+       3 // jsdom lacks these browser APIs, which Ant Design uses for res
+         ponsive layout.
+       4 Object.defineProperty(window, 'matchMedia', {
+       5   writable: true,
+       6   value: (query: string) => ({
+       7     matches: false,
+       8     media: query,
+       9     onchange: null,
+     … +18 lines (ctrl+o to expand)
+
+● Write(frontend\src\lib\lib.test.ts)
+  ⎿  Wrote 116 lines to frontend\src\lib\lib.test.ts
+       1 import type { CalculationInput } from '@shared/calc';
+       2 import { formStateFromInput, initialFormState, runCalculation }
+         from './calculatorForm';
+       3 import { groupByDay } from './dates';
+       4 import { buildShareText, exportFileName, whatsappUrl } from './s
+         hareText';
+       5
+       6 describe('runCalculation (form → engine)', () => {
+       7   it('calculates an even split from typed values', () => {
+       8     const state = { ...initialFormState('even'), bill: '$100', p
+     … +109 lines (~4 KB) (ctrl+o to expand)
+
+● Write(frontend\src\components\CalculatorModal.test.tsx)
+  ⎿  Wrote 84 lines to frontend\src\components\CalculatorModal.test.tsx
+       1 import { render, screen, within } from '@testing-library/react';
+       2 import userEvent from '@testing-library/user-event';
+       3 import { App as AntApp } from 'antd';
+       4 import { MemoryRouter } from 'react-router-dom';
+       5 import { AuthContext, AuthState } from '../auth/AuthContext';
+       6 import { CalculatorForm } from './CalculatorModal';
+       7
+       8 function renderForm(user: AuthState['user'], method: 'even' | 'i
+         temised' = 'even') {
+       9   const auth: AuthState = { user, loading: false, login: vi.fn()
+     … +76 lines (~3 KB) (ctrl+o to expand)
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && npx tsc
+      --noEmit -p tsconfig.json 2>&1 | head -40)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● The typecheck is clean. I'll remove a no-op line from the test setup, then run
+  the frontend tests.
+
+● Update(frontend\src\test\setup.ts)
+  ⎿  Removed 4 lines
+      21    disconnect() {}
+      22  }
+      23  (globalThis as unknown as { ResizeObserver: unknown }).ResizeOb
+          server ??= ResizeObserverStub;
+      24 -                                                               
+      25 -// jsdom doesn't implement getComputedStyle for pseudo-elements
+         -; antd only needs a no-throw call.                             
+      26 -const originalGetComputedStyle = window.getComputedStyle;      
+      27 -window.getComputedStyle = (elt: Element) => originalGetComputed
+         -Style(elt);                                                    
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && npx
+      vitest run 2>&1 | tail -50)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● All 14 frontend tests pass. The output is noisy because the test DOM doesn't
+  support one browser call, so I'll put a stub back for it and speed up the
+  simulated typing.
+● Update(frontend\src\test\setup.ts)
+  ⎿  Added 4 lines
+      21    disconnect() {}
+      22  }
+      23  (globalThis as unknown as { ResizeObserver: unknown }).ResizeOb
+          server ??= ResizeObserverStub;
+      24 +                                                               
+      25 +// jsdom throws "Not implemented" when a pseudo-element is pass
+         +ed (antd measures scrollbars that way).                        
+      26 +const getComputedStyle = window.getComputedStyle.bind(window); 
+      27 +window.getComputedStyle = (elt: Element) => getComputedStyle(el
+         +t);                                                            
+
+● Update(frontend\src\components\CalculatorModal.test.tsx)
+  ⎿  Added 1 line, removed 1 line
+      19  }
+      20  
+      21  async function fillEvenSplit() {
+      22 -  const ui = userEvent.setup();                                
+      22 +  const ui = userEvent.setup({ delay: null });                 
+      23    await ui.type(screen.getByLabelText('Bill amount (incl. tax)'
+          ), '100');
+      24    await ui.click(screen.getByText('18%'));
+      25    const people = screen.getByLabelText('Number of people');
+
+● Update(frontend\src\components\CalculatorModal.test.tsx)
+  ⎿  Added 1 line, removed 1 line
+      64  
+      65    it('AC-06: shows field errors and no result for invalid input
+          ', async () => {
+      66      renderForm(null);
+      67 -    const ui = userEvent.setup();                              
+      67 +    const ui = userEvent.setup({ delay: null });               
+      68      await ui.click(screen.getByRole('button', { name: /calculat
+          e/i }));
+      69      expect(screen.getByText('Enter the bill amount.')).toBeInTh
+          eDocument();
+      70      expect(screen.getByText('Please fix the highlighted fields.
+          ')).toBeInTheDocument();
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && npx
+      vitest run 2>&1 | tail -15 && npm run build 2>&1 | tail -15)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● Frontend tests pass and the production build works. I'll quiet the router
+  warnings, split the large vendor bundle into its own chunk, and move on to
+  Docker.
+
+● Update(frontend\src\main.tsx)
+  ⎿  Added 1 line, removed 1 line
+      21    <React.StrictMode>
+      22      <ConfigProvider theme={theme} locale={enUS}>
+      23        <AntApp>
+      24 -        <BrowserRouter>                                        
+      24 +        <BrowserRouter future={{ v7_startTransition: true, v7_r
+         +elativeSplatPath: true }}>                                     
+      25            <AuthProvider>
+      26              <App />
+      27            </AuthProvider>
+
+● Update(frontend\src\components\CalculatorModal.test.tsx)
+  ⎿  Added 1 line, removed 1 line
+       9    const auth: AuthState = { user, loading: false, login: vi.fn(
+          ), signup: vi.fn(), logout: vi.fn() };
+      10    return render(
+      11      <AntApp>
+      12 -      <MemoryRouter>                                           
+      12 +      <MemoryRouter future={{ v7_startTransition: true, v7_rela
+         +tiveSplatPath: true }}>                                        
+      13          <AuthContext.Provider value={auth}>
+      14            <CalculatorForm method={method} />
+      15          </AuthContext.Provider>
+
+● Update(frontend\vite.config.ts)
+  ⎿  Added 9 lines
+       8      // The calculation engine is shared with the backend (src/s
+          hared).
+       9      alias: { '@shared': fileURLToPath(new URL('../shared', impo
+          rt.meta.url)) },
+      10    },
+      11 +  build: {                                                     
+      12 +    rollupOptions: {                                           
+      13 +      output: {                                                
+      14 +        // Keep the large, rarely-changing UI library in its ow
+         +n cacheable chunk.                                             
+      15 +        manualChunks: { vendor: ['react', 'react-dom', 'react-r
+         +outer-dom'], antd: ['antd', '@ant-design/icons'] },            
+      16 +      },                                                       
+      17 +    },                                                         
+      18 +    chunkSizeWarningLimit: 1200,                               
+      19 +  },                                                           
+      20    server: {
+      21      port: 5173,
+      22      fs: { allow: ['..'] },
+
+● Write(frontend\nginx.conf)
+  ⎿  Wrote 30 lines to frontend\nginx.conf
+       1 server {
+       2   listen 80;
+       3   server_name _;
+       4   root /usr/share/nginx/html;
+       5   index index.html;
+       6
+       7   server_tokens off;
+       8   add_header X-Content-Type-Options nosniff always;
+       9   add_header X-Frame-Options DENY always;
+      10   add_header Referrer-Policy strict-origin-when-cross-origin alw
+     … +21 lines (ctrl+o to expand)
+
+● Write(frontend\Dockerfile)
+  ⎿  Wrote 13 lines to frontend\Dockerfile
+       1 # Build context is src/ (the frontend imports the shared calcula
+         tion engine from src/shared).
+       2 FROM node:22-alpine AS build
+       3 WORKDIR /app
+       4 COPY shared ./shared
+       5 COPY frontend/package.json frontend/package-lock.json ./frontend
+         /
+       6 RUN cd frontend && npm ci --no-audit --no-fund
+       7 COPY frontend ./frontend
+       8 RUN cd frontend && npm run build
+     … +5 lines (ctrl+o to expand)
+
+● Write(backend\Dockerfile)
+  ⎿  Wrote 20 lines to backend\Dockerfile
+       1 # Build context is src/ (the backend imports the shared calculat
+         ion engine from src/shared).
+       2 FROM node:22-alpine AS build
+       3 WORKDIR /app
+       4 COPY shared ./shared
+       5 COPY backend/package.json backend/package-lock.json ./backend/
+       6 RUN cd backend && npm ci --no-audit --no-fund
+       7 COPY backend ./backend
+       8 RUN cd backend && npm run build && npm prune --omit=dev
+       9
+     … +11 lines (ctrl+o to expand)
+
+● Write(docker-compose.yml)
+  ⎿  Wrote 51 lines to docker-compose.yml
+       1 name: tip-bill-splitter
+       2
+       3 services:
+       4   db:
+       5     image: mysql:8.4
+       6     restart: unless-stopped
+       7     environment:
+       8       MYSQL_DATABASE: ${DB_NAME:?Set DB_NAME in src/.env}
+       9       MYSQL_USER: ${DB_USER:?Set DB_USER in src/.env}
+      10       MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in src/.env
+     … +42 lines (~1 KB) (ctrl+o to expand)
+
+● Write(.env.example)
+  ⎿  Wrote 17 lines to .env.example
+       1 # Copy to src/.env before running `docker compose up`.
+       2 # These values are for LOCAL use only — change the secrets for a
+         ny shared or deployed environment.
+       3
+       4 # Port the app is served on: http://localhost:8080
+       5 APP_PORT=8080
+       6
+       7 # MySQL
+       8 DB_NAME=tip_splitter
+       9 DB_USER=tip_splitter
+     … +8 lines (ctrl+o to expand)
+
+● Write(.dockerignore)
+  ⎿  Wrote 8 lines to .dockerignore
+      1 **/node_modules
+      2 **/dist
+      3 **/coverage
+      4 **/*.tsbuildinfo
+      5 **/.env
+      6 .env*
+      7 !.env.example
+      8 docs
+
+● Write(~\Desktop\tip-and-bill-splitter\.gitignore)
+  ⎿  Wrote 8 lines to ~\Desktop\tip-and-bill-splitter\.gitignore
+      1 node_modules/
+      2 dist/
+      3 coverage/
+      4 *.tsbuildinfo
+      5 *.log
+      6 .env
+      7 !.env.example
+      8 .DS_Store
+
+● Update(frontend\nginx.conf)
+  ⎿  Added 2 lines
+       8    add_header X-Content-Type-Options nosniff always;
+       9    add_header X-Frame-Options DENY always;
+      10    add_header Referrer-Policy strict-origin-when-cross-origin al
+          ways;
+      11 +  # Ant Design injects its styles at runtime, hence 'unsafe-inl
+         +ine' for styles only.                                          
+      12 +  add_header Content-Security-Policy "default-src 'self'; scrip
+         +t-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' 
+         +data: blob:; font-src 'self' data:; connect-src 'self'; object-
+         +src 'none'; base-uri 'self'; frame-ancestors 'none'; form-actio
+         +n 'self'" always;                                              
+      13  
+      14    # API is served from the same origin, so the session cookie s
+          tays first-party.
+      15    location /api/ {
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src" && cp .env.example
+      .env && docker compose up --build -d 2>&1 | tail -25)
+  ⎿  (No output)
+  ⎿  (timeout 10m)
+
+● All three containers build, start and pass their health checks. Next I'll run
+  a real end-to-end check against the live stack (MySQL included) through the
+  same address and proxy the browser uses.
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src" &&
+      B=http://localhost:8080/api; J=$(mktemp); K=$(mktemp)
+      echo "--- frontend index + SPA fallback"; curl -s…)
+  ⎿  (No output)
+  ⎿  (timeout 3m)
+
+● The live stack passes all checks: auth, data isolation, password hashing,
+  migrations, calculation accuracy, security headers, and rate limiting are all
+  working. Now I'll test the actual UI in a browser across desktop and phone
+  widths.
+
+● Bash(S="C:/Users/DELL/AppData/Local/Temp/claude/c--Users-DELL-Desktop-tip-and-
+      bill-splitter/008705a4-6cc9-4562-a345-6f992e831954/scratchpad/ui"; mkdir
+      -p "$S" && cd…)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+  Made 1 scratchpad edit +157 (ctrl+o to expand)
+● Bash(cd "C:/Users/DELL/AppData/Local/Temp/claude/c--Users-DELL-Desktop-tip-and
+      -bill-splitter/008705a4-6cc9-4562-a345-6f992e831954/scratchpad/ui" && node
+      check.js 2>&…)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● That failure is in my test script, not the app: it clicked an item from the
+  dropdown that was still closing. I'll pick options by typing instead.
+
+  Made 1 scratchpad edit +4 -3 (ctrl+o to expand)
+
+● Bash(cd "C:/Users/DELL/AppData/Local/Temp/claude/c--Users-DELL-Desktop-tip-and
+      -bill-splitter/008705a4-6cc9-4562-a345-6f992e831954/scratchpad/ui" && node
+      check.js 2>&…)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+  Made 1 scratchpad edit +4 -2 (ctrl+o to expand)
+
+● Bash(cd "C:/Users/DELL/AppData/Local/Temp/claude/c--Users-DELL-Desktop-tip-and
+      -bill-splitter/008705a4-6cc9-4562-a345-6f992e831954/scratchpad/ui" && node
+      check.js 2>&…)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● All flows pass end-to-end in a real browser with no console errors—guest and
+  logged-in paths, calculate-only reset, mobile layout, and auth redirects all
+  work as expected. Now checking the screenshots for visual quality.
+
+  Read 3 files (ctrl+o to expand)
+
+● The layout is clean on desktop and mobile. One small polish item: the icons in
+  the method picker sit on their own centred line. I'll fix that, then check
+  the History screens.
+
+● Update(frontend\src\pages\HomePage.tsx)
+  ⎿  Added 1 line, removed 1 line
+      41                  >
+      42                    <Radio.Button value="even">
+      43                      <TeamOutlined /> <strong>Even</strong>
+      44 -                    <span>Everyone pays the same</span>        
+      44 +                    <span className="method-picker__hint">Every
+         +one pays the same</span>                                       
+      45                    </Radio.Button>
+      46                    <Radio.Button value="itemised">
+      47                      <UnorderedListOutlined /> <strong>Itemised<
+          /strong>
+
+● Update(frontend\src\pages\HomePage.tsx)
+  ⎿  Added 1 line, removed 1 line
+      45                    </Radio.Button>
+      46                    <Radio.Button value="itemised">
+      47                      <UnorderedListOutlined /> <strong>Itemised<
+          /strong>
+      48 -                    <span>Pay for what you ordered</span>      
+      48 +                    <span className="method-picker__hint">Pay f
+         +or what you ordered</span>                                     
+      49                    </Radio.Button>
+      50                  </Radio.Group>
+      51                  <Button type="primary" size="large" block icon=
+          {<CalculatorOutlined />} onClick={() => setModalOpen(true)}>
+
+● Update(frontend\src\styles.css)
+  ⎿  Added 1 line, removed 1 line
+      162    display: none !important;
+      163  }
+      164  
+      165 -.method-picker .ant-radio-button-wrapper span span {          
+      165 +.method-picker .method-picker__hint {                         
+      166    display: block;
+      167    font-size: 13px;
+      168    color: var(--muted);
+
+  Read 2 files (ctrl+o to expand)
+
+● History works. Those screenshots caught the modal mid-animation, so I'll
+  retake them after rebuilding. Meanwhile I'll look at the npm audit warnings
+  from the installs.
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/backend" && echo "==
+      backend (prod deps)" && npm audit --omit=dev 2>&1 | tail -15; cd
+      ../frontend && echo "=…)
+  ⎿  (No output)
+  ⎿  (timeout 2m)
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && npm
+      audit --omit=dev --json 2>/dev/null | node -e "const
+      a=JSON.parse(require('fs').readFileSyn…)
+  ⎿  (No output)
+  ⎿  (timeout 2m)
+
+● I'll fix the three flagged dependencies: upgrading jsPDF to 4.2.1 and React
+  Router to v7, and pinning Multer to 2.5.0 via an npm override since the app
+  doesn't use file uploads.
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && npm
+      install jspdf@^4.2.1 react-router-dom@^7.18.5 2>&1 | tail -2 && npm audit
+      --omit=dev 2>&1 |…)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● Both production dependency trees now audit clean. React Router v7 no longer
+  needs the warning flags, so I'll remove them and re-run every test suite.
+
+● Update(frontend\src\main.tsx)
+  ⎿  Added 1 line, removed 1 line
+      21    <React.StrictMode>
+      22      <ConfigProvider theme={theme} locale={enUS}>
+      23        <AntApp>
+      24 -        <BrowserRouter future={{ v7_startTransition: true, v7_r
+         -elativeSplatPath: true }}>                                     
+      24 +        <BrowserRouter>                                        
+      25            <AuthProvider>
+      26              <App />
+      27            </AuthProvider>
+
+● Update(frontend\src\components\CalculatorModal.test.tsx)
+  ⎿  Added 1 line, removed 1 line
+       9    const auth: AuthState = { user, loading: false, login: vi.fn(
+          ), signup: vi.fn(), logout: vi.fn() };
+      10    return render(
+      11      <AntApp>
+      12 -      <MemoryRouter future={{ v7_startTransition: true, v7_rela
+         -tiveSplatPath: true }}>                                        
+      12 +      <MemoryRouter>                                           
+      13          <AuthContext.Provider value={auth}>
+      14            <CalculatorForm method={method} />
+      15          </AuthContext.Provider>
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && npm run
+      typecheck 2>&1 | tail -10 && npx vitest run 2>&1 | grep -E "Test
+      Files|Tests |✓|✗|FAIL|…)
+  ⎿  (No output)
+  ⎿  (timeout 10m)
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && npx
+      vitest run -t "AC-17" 2>&1 | grep -vE "^\s+at " | grep -iE
+      "error|timed|expected|AC-17" | h…)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● The test passes in isolation but hit the 20-second limit at 26s when run
+  alongside the backend suite, likely due to slow Ant Design tests under jsdom.
+  I'll increase the timeout and re-run.
+
+● Update(frontend\vite.config.ts)
+  ⎿  Added 1 line, removed 1 line
+      28      globals: true,
+      29      setupFiles: './src/test/setup.ts',
+      30      include: ['src/**/*.test.{ts,tsx}'],
+      31 -    testTimeout: 20_000,                                       
+      31 +    testTimeout: 60_000, // Ant Design components are slow to r
+         +ender under jsdom                                              
+      32    },
+      33  });
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && npm test
+      2>&1 | grep -E "Test Files|Tests " )  ⎿  (No output)
+  ⎿  (timeout 10m)
+
+● All 62 tests pass. I'll rebuild the Docker images with the dependency upgrades
+  and UI fix, then re-run the browser check, this time including the History
+  details export and waiting for animations before screenshots.
+
+● Bash(cd "C:/Users/DELL/AppData/Local/Temp/claude/c--Users-DELL-Desktop-tip-and
+      -bill-splitter/008705a4-6cc9-4562-a345-6f992e831954/scratchpad/ui" && node
+      -e "
+      const f…)
+  ⎿  (No output)
+  ⎿  (timeout 10m)
+
+● Bash(cd "C:/Users/DELL/AppData/Local/Temp/claude/c--Users-DELL-Desktop-tip-and
+      -bill-splitter/008705a4-6cc9-4562-a345-6f992e831954/scratchpad/ui" && node
+      check.js 2>&…)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+  Read 4 files (ctrl+o to expand)
+
+● The PDF looks right, except the footnote came out bold. I'll fix that one
+  line.
+
+● Update(frontend\src\lib\exportFiles.ts)
+  ⎿  Added 1 line, removed 1 line
+      93  
+      94    y += 16;
+      95    ensureSpace(30);
+      96 -  doc.setFontSize(9).setTextColor(110);                        
+      96 +  doc.setFont('helvetica', 'normal').setFontSize(9).setTextColo
+         +r(110);                                                        
+      97    doc.text('Shares are rounded to the cent; leftover cents are 
+          spread fairly so everything adds up exactly.', left, y, {
+      98      maxWidth: right - left,
+      99    });
+
+● Now the README. It's written for the reviewer and covers each section you
+  listed.
+
+● Write(~\Desktop\tip-and-bill-splitter\README.md)
+  ⎿  Wrote 189 lines to ~\Desktop\tip-and-bill-splitter\README.md
+       1 # Tip & Bill Splitter
+       2
+       3 A mobile-friendly web app that works out the **tip**, the **gran
+         d total** and **each person's share** when a group eats out — qu
+         ickly, and without the arithmetic mistakes that come from doing
+         it by hand. Every share is exact to the cent and the shares alwa
+         ys add up to the total.
+       4
+       5 ## Who it's for
+       6
+     … +183 lines (ctrl+o to expand)
+
+● Update(~\Desktop\tip-and-bill-splitter\README.md)
+  ⎿  Added 1 line, removed 1 line
+      133  
+      134  ## Security
+      135  
+      136 -- Passwords: 8–72 characters with a letter and a number; hashe
+          -d with **bcrypt** (cost 12); never returned or logged. Login u
+          -ses a constant-time-style check so unknown emails aren't revea
+          -led by timing, and returns one generic error.                 
+      136 +- Passwords: 8–72 characters with a letter and a number; hashe
+          +d with **bcrypt** (cost 12); never returned or logged. Login c
+          +hecks a dummy hash when the email is unknown, so response time
+          +s don't reveal which emails have accounts, and returns one gen
+          +eric error.                                                   
+      137  - Sessions: **JWT (HS256, 24 h)** in an **httpOnly, SameSite=L
+           ax** cookie — not readable by JavaScript. Logout clears it.
+      138  - Authorization: every `/api/calculations` route requires a va
+           lid session, and every query is filtered by the logged-in user
+           's ID; another user's calculation returns **404**.
+      139  - Validation: all request bodies are validated server-side; un
+           known fields are rejected. Saved results are always **recalcul
+           ated by the server** from the inputs — clients cannot submit r
+           esults.
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src" && docker compose up
+      --build -d frontend 2>&1 | tail -2 && sleep 3; curl -s -o /dev/null -w
+      "frontend %{htt…)
+  ⎿  (No output)
+  ⎿  (timeout 10m)
+
+● The stack is healthy after the final rebuild, and I've removed the local build
+  output. I'll also fix two small Markdown lint issues in the README.
+
+● Update(~\Desktop\tip-and-bill-splitter\README.md)
+  ⎿  Added 1 line, removed 1 line
+      70  docker compose up --build -d
+      71  ```
+      72  
+      73 -Open **http://localhost:8080**.                                
+      73 +Open **<http://localhost:8080>**.                              
+      74  
+      75  The first build takes a few minutes. MySQL starts first, then t
+          he backend (which runs the database migration automatically), t
+          hen the frontend. Check status with `docker compose ps` — all t
+          hree services should be `healthy`/`running`.
+      76  
+
+● Update(~\Desktop\tip-and-bill-splitter\README.md)
+  ⎿  Added 1 line, removed 1 line
+      36  
+      37  ## Project structure
+      38  
+      39 -```                                                            
+      39 +```text                                                        
+      40  README.md
+      41  src/
+      42  ├── docker-compose.yml      # frontend + backend + MySQL
+
+● The app is built and checked against the requirements. It's running now at
+  http://localhost:8080; to stop it, run docker compose down in src/. To run it
+  from scratch, follow the README: copy the example .env, then docker compose up
+  --build -d in src/.
+
+  Test results:
+
+  ┌───────────────────────────────────────────────────────┬─────────────────┐
+  │                         Check                         │     Result      │
+  ├───────────────────────────────────────────────────────┼─────────────────┤
+  │ Calculation engine tests: worked examples, every edge │                 │
+  │  case, and 6,000 random inputs checking exact totals  │ 36 passed       │
+  │ and the 1¢ limit                                      │                 │
+  ├───────────────────────────────────────────────────────┼─────────────────┤
+  │ API tests: login and sessions, password hashing,      │                 │
+  │ validation, 401 without login, 404 for another user's │ 12 passed       │
+  │  data, results calculated only on the server          │                 │
+  ├───────────────────────────────────────────────────────┼─────────────────┤
+  │ Frontend tests: results only after Calculate, guests  │ 14 passed       │
+  │ can't save, field errors, WhatsApp fallback           │                 │
+  ├───────────────────────────────────────────────────────┼─────────────────┤
+  │ Full app in Docker with real MySQL, checked through   │ Every flow      │
+  │ the API and in Chrome at desktop and 360 px phone     │ works, no       │
+  │ width                                                 │ console errors  │
+  ├───────────────────────────────────────────────────────┼─────────────────┤
+  │ Security audit of the app's dependencies              │ Clean           │
+  └───────────────────────────────────────────────────────┴─────────────────┘
+
+  The browser check covered both split methods, Save → History → details → Edit
+  a copy, all four sharing options, and logging out. On the phone layout the
+  hero image is hidden and nothing scrolls sideways.
+
+  Where things are:
+  - README.md has the sections you asked for: the app and its users,
+    prerequisites, exact run commands, how to run tests, the AI tool and model,
+    manual code changes, and assumptions.
+  - src/docs/REQUIREMENTS.md is the approved spec, with decisions D1–D23 and
+    acceptance criteria AC-01 to AC-19.
+  - The calculation code is in src/shared/calc/. The browser and the server run
+    the same copy, so their results can't disagree.
+
+  Changes and choices made during the build:
+  - Bill shares: subtracting a rounded tip from a rounded total could leave a
+    bill share 2¢ off in rare cases. Each person's bill share is now chosen so
+    the bill, tip and total figures all stay within 1¢. The worked examples give
+    the same numbers, and section 6.1 of the doc is updated.
+  - AC-15 reworded: the save request now rejects any request that includes a
+    result, rather than ignoring it.
+  - Security upgrades:
+    - jsPDF to 4.2.1 (fixes a critical issue).
+    - React Router to v7 (fixes a moderate issue).
+    - A patched version of the file-upload library NestJS includes (multer),
+      which the app doesn't use.
+  - Small UI choices:
+    - An Everyone button that assigns an item to everyone.
+    - Items left unnamed are called "Item 1", "Item 2", and so on.
+    - Even and Itemised can also be switched inside the calculator.
+    - Save changes to a disabled "Saved" after one click, to prevent accidental
+      duplicates.
+
+  Before you submit:
+  - The README's Manual code changes section says "None so far". Update it if
+    you edit anything by hand.
+  - node_modules/ folders and the local src/.env (which holds secrets) are still
+    on disk so the tests can run. Leave them out of the zip; .gitignore already
+    lists them.
+  - Limitation: the PDF fonts only cover Latin characters, so names in other
+    scripts or with emoji may not show correctly in the PDF. The image, the
+    shared text and the app itself are unaffected. This is listed in the
+    README's assumptions.
+
+> <ide_opened_file>The user opened the file
+  c:\Users\DELL\Desktop\tip-and-bill-splitter\src\docker-compose.yml in the
+  IDE. This may or may not be related to the current task.</ide_opened_file>
+
+> Update the user flow:
+  - Open the Login and Sign Up forms in modals instead of separate pages.
+  - When user saves a calculation, close the result modal and show a brief
+  confirmation that it was saved.
+  - Add a Delete option for each saved calculation in History. Ask for
+  confirmation before deleting it.
+
+● These three changes reverse two approved decisions: D18 (separate
+  login/sign-up pages) and D20 (no delete). Login opening in a modal also raises
+  one question that's yours to decide.
+
+● User answered Claude's questions:
+  ⎿  · With Login/Sign Up as modals, a guest who clicks “Log in to save” in the
+     calculator can log in without leaving the page. Should their unsaved result
+     be kept so they can save it right after logging in? (Currently D19 says
+     the result is not kept.) → Keep it (Recommended)
+
+● Noted: the guest's result will be kept when they log in from the calculator.
+  I'll start with the backend delete endpoint and its tests.
+
+● Update(backend\src\calculations\calculations.service.ts)
+  ⎿  Added 5 lines
+      29      return calculation;
+      30    }
+      31  
+      32 +  async remove(userId: number, id: string): Promise<void> {    
+      33 +    const { affected } = UUID_RE.test(id) ? await this.calculat
+         +ions.delete({ id, userId }) : { affected: 0 };                 
+      34 +    if (!affected) throw new NotFoundException('Calculation not
+         + found.');                                                     
+      35 +  }                                                            
+      36 +                                                               
+      37    async create(userId: number, dto: SaveCalculationDto): Promis
+          e<Calculation> {
+      38      const outcome = calculate(dto.input as CalculationInput);
+      39      if (!outcome.ok) {
+
+● Update(backend\src\calculations\calculations.controller.ts)
+  ⎿  Added 6 lines
+      23    create(@CurrentUser() user: PublicUser, @Body() dto: SaveCalc
+          ulationDto) {
+      24      return this.calculations.create(user.id, dto);
+      25    }
+      26 +                                                               
+      27 +  @Delete(':id')                                               
+      28 +  @HttpCode(204)                                               
+      29 +  remove(@CurrentUser() user: PublicUser, @Param('id') id: stri
+         +ng): Promise<void> {                                           
+      30 +    return this.calculations.remove(user.id, id);              
+      31 +  }                                                            
+      32  }
+
+● Update(backend\src\calculations\calculations.controller.ts)
+  ⎿  Added 1 line, removed 1 line
+      1 -import { Body, Controller, Get, Param, Post, UseGuards } from '@
+        -nestjs/common';                                                 
+      1 +import { Body, Controller, Delete, Get, HttpCode, Param, Post, U
+        +seGuards } from '@nestjs/common';                               
+      2  import { CurrentUser, JwtAuthGuard } from '../auth/jwt-auth.guar
+         d';
+      3  import { PublicUser } from '../users/user.entity';
+      4  import { SaveCalculationDto } from './calculations.dto';
+
+● Update(backend\test\api.e2e-spec.ts)
+  ⎿  Added 5 lines
+      35    async findOneBy(where: Partial<T>) {
+      36      return this.rows.find((r) => this.matches(r, where)) ?? nul
+          l;
+      37    }
+      38 +  async delete(where: Partial<T>) {                            
+      39 +    const before = this.rows.length;                           
+      40 +    this.rows = this.rows.filter((r) => !this.matches(r, where)
+         +);                                                             
+      41 +    return { affected: before - this.rows.length };            
+      42 +  }                                                            
+      43    async find({ where }: { where: Partial<T> }) {
+      44      return this.rows.filter((r) => this.matches(r, where)).sort
+          ((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      45    }
+
+● Update(backend\test\api.e2e-spec.ts)
+  ⎿  Added 11 lines
+      216        await request(app.getHttpServer()).get(`/api/calculation
+           s/${randomUUID()}`).set('Cookie', alice).expect(404);
+      217        await request(app.getHttpServer()).get('/api/calculation
+           s/not-a-uuid').set('Cookie', alice).expect(404);
+      218      });
+      219 +                                                              
+      220 +    it('AC-20: deletes only the owner’s calculation', async ()
+          + => {                                                         
+      221 +      await request(app.getHttpServer()).delete(`/api/calculat
+          +ions/${aliceCalcId}`).expect(401);                            
+      222 +      await request(app.getHttpServer()).delete(`/api/calculat
+          +ions/${aliceCalcId}`).set('Cookie', bob).expect(404);         
+      223 +      await request(app.getHttpServer()).get(`/api/calculation
+          +s/${aliceCalcId}`).set('Cookie', alice).expect(200);          
+      224 +                                                              
+      225 +      await request(app.getHttpServer()).delete(`/api/calculat
+          +ions/${aliceCalcId}`).set('Cookie', alice).expect(204);       
+      226 +      await request(app.getHttpServer()).get(`/api/calculation
+          +s/${aliceCalcId}`).set('Cookie', alice).expect(404);          
+      227 +      await request(app.getHttpServer()).delete(`/api/calculat
+          +ions/${aliceCalcId}`).set('Cookie', alice).expect(404);       
+      228 +      await request(app.getHttpServer()).delete('/api/calculat
+          +ions/not-a-uuid').set('Cookie', alice).expect(404);           
+      229 +    });                                                       
+      230    });
+      231  });
+
+● Now the frontend. First the API client and a shared login/sign-up modal that
+  any part of the app can open:
+● Update(frontend\src\lib\api.ts)
+  ⎿  Added 1 line, removed 1 line
+      42    return 'Request failed. Please try again.';
+      43  }
+      44  
+      45 -async function request<T>(method: 'GET' | 'POST', path: string,
+         - body?: unknown): Promise<T> {                                 
+      45 +async function request<T>(method: 'GET' | 'POST' | 'DELETE', pa
+         +th: string, body?: unknown): Promise<T> {                      
+      46    let res: Response;
+      47    try {
+      48      res = await fetch(`/api${path}`, {
+
+● Update(frontend\src\lib\api.ts)
+  ⎿  Added 1 line
+      73    listCalculations: () => request<SavedCalculationSummary[]>('G
+          ET', '/calculations'),
+      74    getCalculation: (id: string) => request<SavedCalculation>('GE
+          T', `/calculations/${encodeURIComponent(id)}`),
+      75    saveCalculation: (body: { title?: string; input: CalculationI
+          nput }) => request<SavedCalculation>('POST', '/calculations', b
+          ody),
+      76 +  deleteCalculation: (id: string) => request<void>('DELETE', `/
+         +calculations/${encodeURIComponent(id)}`),                      
+      77  };
+
+● Write(frontend\src\auth\AuthModal.tsx)
+  ⎿  Wrote 240 lines to frontend\src\auth\AuthModal.tsx
+       1 import { LockOutlined, MailOutlined, UserOutlined } from '@ant-d
+         esign/icons';
+       2 import { Alert, App, Button, Form, Input, Modal, Typography } fr
+         om 'antd';
+       3 import { createContext, ReactNode, useCallback, useContext, useE
+         ffect, useMemo, useState } from 'react';
+       4 import { useLocation, useNavigate } from 'react-router-dom';
+       5 import { ApiError } from '../lib/api';
+       6 import { useAuth } from './AuthContext';
+       7
+     … +233 lines (ctrl+o to expand)
+
+● Bash(rm "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend/src/pages/Au
+      thPages.tsx")
+  ⎿  Done
+
+● Update(frontend\src\auth\AuthModal.tsx)
+  ⎿  Added 1 line, removed 1 line
+      72    useEffect(() => {
+      73      if (!user) openAuth(mode, from?.startsWith('/') ? { redirec
+          tTo: from } : undefined);
+      74      navigate('/', { replace: true });
+      75 -  }, []); // eslint-disable-line react-hooks/exhaustive-deps --
+         - run once on arrival                                           
+      75 +  }, []); // run once on arrival                               
+      76  
+      77    return null;
+      78  }
+
+● Update(frontend\src\App.tsx)
+  ⎿  Added 1 line, removed 1 line
+      2  import { ReactNode } from 'react';
+      3  import { Navigate, Outlet, Route, Routes, useLocation, useNaviga
+         te } from 'react-router-dom';
+      4  import { useAuth } from './auth/AuthContext';
+      5 +import { AuthRedirect } from './auth/AuthModal';                
+      6  import { AppHeader } from './components/AppHeader';
+      6 -import { LoginPage, SignupPage } from './pages/AuthPages';      
+      7  import { HistoryPage } from './pages/HistoryPage';
+      8  import { HomePage } from './pages/HomePage';
+      9  
+
+● Update(frontend\src\App.tsx)
+  ⎿  Added 3 lines, removed 2 lines
+      52      <Routes>
+      53        <Route element={<Layout />}>
+      54          <Route index element={<HomePage />} />
+      55 -        <Route path="login" element={<LoginPage />} />         
+      56 -        <Route path="signup" element={<SignupPage />} />       
+      55 +        {/* Login and Sign Up are modals; these paths just open
+         + them over Home. */}                                           
+      56 +        <Route path="login" element={<AuthRedirect mode="login"
+         + />} />                                                        
+      57 +        <Route path="signup" element={<AuthRedirect mode="signu
+         +p" />} />                                                      
+      58          <Route
+      59            path="history"
+      60            element={
+
+● Update(frontend\src\main.tsx)
+  ⎿  Added 3 lines, removed 1 line
+      23        <AntApp>
+      24          <BrowserRouter>
+      25            <AuthProvider>
+      26 -            <App />                                            
+      26 +            <AuthModalProvider>                                
+      27 +              <App />                                          
+      28 +            </AuthModalProvider>                               
+      29            </AuthProvider>
+      30          </BrowserRouter>
+      31        </AntApp>
+
+● Update(frontend\src\main.tsx)
+  ⎿  Added 1 line
+       5  import { BrowserRouter } from 'react-router-dom';
+       6  import App from './App';
+       7  import { AuthProvider } from './auth/AuthContext';
+       8 +import { AuthModalProvider } from './auth/AuthModal';          
+       9  import './styles.css';
+      10  
+      11  const theme = {
+
+● Next, the header buttons and the guest prompt in the result switch from page
+  links to opening the modal:
+
+● Update(frontend\src\components\AppHeader.tsx)
+  ⎿  Added 2 lines, removed 2 lines
+      50      </Dropdown>
+      51    ) : (
+      52      <Space>
+      53 -      <Button onClick={() => navigate('/login')}>Login</Button>
+      54 -      <Button type="primary" onClick={() => navigate('/signup')
+         -}>                                                             
+      53 +      <Button onClick={() => openAuth('login')}>Login</Button> 
+      54 +      <Button type="primary" onClick={() => openAuth('signup')}
+         +>                                                              
+      55          Sign Up
+      56        </Button>
+      57      </Space>
+
+● Update(frontend\src\components\AppHeader.tsx)
+  ⎿  Added 2 lines, removed 2 lines
+      82                    </>
+      83                  ) : (
+      84                    <>
+      85 -                    <Button block onClick={() => { setDrawerOpe
+         -n(false); navigate('/login'); }}>                              
+      85 +                    <Button block onClick={() => { setDrawerOpe
+         +n(false); openAuth('login'); }}>                               
+      86                        Login
+      87                      </Button>
+      88 -                    <Button block type="primary" onClick={() =>
+         - { setDrawerOpen(false); navigate('/signup'); }}>              
+      88 +                    <Button block type="primary" onClick={() =>
+         + { setDrawerOpen(false); openAuth('signup'); }}>               
+      89                        Sign Up
+      90                      </Button>
+      91                    </>
+
+● Update(frontend\src\components\AppHeader.tsx)
+  ⎿  Added 1 line
+      14  
+      15  export function AppHeader() {
+      16    const { user, logout } = useAuth();
+      17 +  const { openAuth } = useAuthModal();                         
+      18    const { message } = App.useApp();
+      19    const navigate = useNavigate();
+      20    const selectedKey = useSelectedKey();
+
+● Update(frontend\src\components\AppHeader.tsx)
+  ⎿  Added 1 line
+      3  import { useState } from 'react';
+      4  import { Link, useLocation, useNavigate } from 'react-router-dom
+         ';
+      5  import { useAuth } from '../auth/AuthContext';
+      6 +import { useAuthModal } from '../auth/AuthModal';               
+      7  
+      8  function useSelectedKey(): string {
+      9    const { pathname, hash } = useLocation();
+
+● Write(frontend\src\components\SaveAction.tsx)
+  ⎿  Added 21 lines, removed 10 lines
+       1 -import { CheckOutlined, SaveOutlined } from '@ant-design/icons'
+         -;                                                              
+       1 +import { SaveOutlined } from '@ant-design/icons';              
+       2  import { App, Button, Input, Modal, Typography } from 'antd';
+       3  import { CalculationInput, LIMITS } from '@shared/calc';
+       4  import { useState } from 'react';
+       5 -import { Link } from 'react-router-dom';                       
+       5  import { useAuth } from '../auth/AuthContext';
+       6 +import { useAuthModal } from '../auth/AuthModal';              
+       7  import { api, ApiError, SavedCalculation } from '../lib/api';
+       8  
+       9  interface SaveActionProps {
+      10    input: CalculationInput;
+      11 -  onSaved?: (saved: SavedCalculation) => void;                 
+      11 +  /** Called after a successful save; the calculator closes its
+         +elf in response. */                                            
+      12 +  onSaved: (saved: SavedCalculation) => void;                  
+      13  }
+      14  
+      14 -/** Manual save for logged-in users; guests get a prompt to log
+         - in instead. */                                                
+      15 +/**                                                            
+      16 + * Manual save for logged-in users. Guests get links that open 
+         +Login / Sign Up in a modal on                                  
+      17 + * top of the calculator, so the result is still here to save o
+         +nce they're logged in.                                         
+      18 + */                                                            
+      19  export function SaveAction({ input, onSaved }: SaveActionProps)
+           {
+      20    const { user } = useAuth();
+      21 +  const { openAuth } = useAuthModal();                         
+      22    const { message } = App.useApp();
+      23    const [dialogOpen, setDialogOpen] = useState(false);
+      24    const [title, setTitle] = useState('');
+      25    const [saving, setSaving] = useState(false);
+      21 -  const [saved, setSaved] = useState(false);                   
+      26  
+      27    if (!user) {
+      28      return (
+      29        <Typography.Text type="secondary" className="save-hint">
+      26 -        <Link to="/login">Log in</Link> or <Link to="/signup">s
+         -ign up</Link> to save this result.                             
+      30 +        <Button type="link" className="inline-link" onClick={()
+         + => openAuth('login')}>                                        
+      31 +          Log in                                               
+      32 +        </Button>{' '}                                         
+      33 +        or{' '}                                                
+      34 +        <Button type="link" className="inline-link" onClick={()
+         + => openAuth('signup')}>                                       
+      35 +          sign up                                              
+      36 +        </Button>{' '}                                         
+      37 +        to save this result.                                   
+      38        </Typography.Text>
+      39      );
+      40    }
+      41  
+      42    const save = async () => {
+      43 +    if (saving) return;                                        
+      44      setSaving(true);
+      45      try {
+      46        const result = await api.saveCalculation({ title: title.t
+          rim() || undefined, input });
+      35 -      setSaved(true);                                          
+      47        setDialogOpen(false);
+      48        message.success('Saved to your history.');
+      38 -      onSaved?.(result);                                       
+      49 +      onSaved(result);                                         
+      50      } catch (err) {
+      51        if (!(err instanceof ApiError && err.status === 401)) {
+      52          message.error(err instanceof ApiError ? err.messages.jo
+          in(' ') : 'Could not save. Please try again.');
+     ...
+      58  
+      59    return (
+      60      <>
+      50 -      <Button type="primary" icon={saved ? <CheckOutlined /> : 
+         -<SaveOutlined />} disabled={saved} onClick={() => setDialogOpen
+         -(true)}>                                                       
+      51 -        {saved ? 'Saved' : 'Save'}                             
+      61 +      <Button type="primary" icon={<SaveOutlined />} onClick={(
+         +) => setDialogOpen(true)}>                                     
+      62 +        Save                                                   
+      63        </Button>
+      64        <Modal
+      65          open={dialogOpen}
+
+● Update(frontend\src\styles.css)
+  ⎿  Added 3 lines, removed 1 line
+      433    border-top: 1px solid var(--line);
+      434  }
+      435  
+      436 -.save-hint a {                                                
+      436 +.save-hint .inline-link {                                     
+      437 +  padding: 0;                                                 
+      438 +  height: auto;                                               
+      439    font-weight: 600;
+      440  }
+      441  
+
+● Next, saving closes the calculator modal:
+
+● Update(frontend\src\components\CalculatorModal.tsx)
+  ⎿  Added 9 lines, removed 1 line
+      42          </Space>
+      43        }
+      44      >
+      45 -      <CalculatorForm method={method} initialInput={initialInpu
+         -t} onSaved={onSaved} />                                        
+      45 +      {/* After a save the modal closes; SaveAction shows the "
+         +Saved" confirmation. */}                                       
+      46 +      <CalculatorForm                                          
+      47 +        method={method}                                        
+      48 +        initialInput={initialInput}                            
+      49 +        onSaved={(saved) => {                                  
+      50 +          onSaved?.(saved);                                    
+      51 +          onClose();                                           
+      52 +        }}                                                     
+      53 +      />                                                       
+      54      </Modal>
+      55    );
+      56  }
+
+● Update(frontend\src\components\CalculatorModal.tsx)
+  ⎿  Added 1 line, removed 1 line
+      61  interface CalculatorFormProps {
+      62    method: SplitMethod;
+      63    initialInput?: CalculationInput;
+      64 -  onSaved?: (saved: SavedCalculation) => void;                 
+      64 +  onSaved: (saved: SavedCalculation) => void;                  
+      65  }
+      66  
+      67  export function CalculatorForm({ method, initialInput, onSaved 
+          }: CalculatorFormProps) {
+
+● Update(frontend\src\pages\HistoryPage.tsx)
+  ⎿  Added 2 lines, removed 2 lines
+      1 -import { CalculatorOutlined, CopyOutlined, HistoryOutlined } fro
+        -m '@ant-design/icons';                                          
+      2 -import { Alert, Button, Empty, List, Modal, Result, Skeleton, Sp
+        -ace, Spin, Typography } from 'antd';                            
+      1 +import { CalculatorOutlined, CopyOutlined, DeleteOutlined, Histo
+        +ryOutlined } from '@ant-design/icons';                          
+      2 +import { Alert, App, Button, Empty, List, Modal, Result, Skeleto
+        +n, Space, Spin, Typography } from 'antd';                       
+      3  import { CalculationInput, formatCents } from '@shared/calc';
+      4  import { useCallback, useEffect, useMemo, useRef, useState } fro
+         m 'react';
+      5  import { CalculatorModal } from '../components/CalculatorModal';
+
+● Update(frontend\src\pages\HistoryPage.tsx)
+  ⎿  Added 18 lines, removed 1 line
+       93                          setSelectedId(item.id);
+       94                        }
+       95                      }}
+       96 -                    extra={<span className="history-item__tota
+          -l">{formatCents(item.totalCents)}</span>}                     
+       96 +                    extra={                                   
+       97 +                      <Space size={4}>                        
+       98 +                        <span className="history-item__total">
+          +{formatCents(item.totalCents)}</span>                         
+       99 +                        <Button                               
+      100 +                          type="text"                         
+      101 +                          danger                              
+      102 +                          icon={<DeleteOutlined />}           
+      103 +                          aria-label={`Delete ${item.title || 
+          +methodLabel(item.method)}`}                                   
+      104 +                          title="Delete"                      
+      105 +                          // Keep clicks/keys on the button fr
+          +om also opening the details.                                  
+      106 +                          onClick={(e) => {                   
+      107 +                            e.stopPropagation();              
+      108 +                            confirmDelete(item);              
+      109 +                          }}                                  
+      110 +                          onKeyDown={(e) => e.stopPropagation(
+          +)}                                                            
+      111 +                        />                                    
+      112 +                      </Space>                                
+      113 +                    }                                         
+      114                    >
+      115                      <List.Item.Meta
+      116                        title={item.title || methodLabel(item.me
+           thod)}
+● Update(frontend\src\pages\HistoryPage.tsx)
+  ⎿  Added 25 lines
+      33  
+      34    const groups = useMemo(() => groupByDay(items ?? []), [items]
+          );
+      35  
+      36 +  const confirmDelete = (item: SavedCalculationSummary) => {   
+      37 +    const name = item.title || methodLabel(item.method);       
+      38 +    modal.confirm({                                            
+      39 +      title: 'Delete this calculation?',                       
+      40 +      content: `“${name}” (${formatCents(item.totalCents)}) wil
+         +l be permanently removed from your history. This can't be undon
+         +e.`,                                                           
+      41 +      okText: 'Delete',                                        
+      42 +      okButtonProps: { danger: true },                         
+      43 +      cancelText: 'Cancel',                                    
+      44 +      onOk: async () => {                                      
+      45 +        try {                                                  
+      46 +          await api.deleteCalculation(item.id);                
+      47 +        } catch (err) {                                        
+      48 +          if (err instanceof ApiError && err.status === 401) re
+         +turn; // session expired; handled globally                     
+      49 +          // 404 means it's already gone, so the list should dr
+         +op it too.                                                     
+      50 +          if (!(err instanceof ApiError && err.status === 404))
+         + {                                                             
+      51 +            message.error('Could not delete. Please try again.'
+         +);                                                             
+      52 +            return;                                            
+      53 +          }                                                    
+      54 +        }                                                      
+      55 +        setItems((list) => list && list.filter((c) => c.id !== 
+         +item.id));                                                     
+      56 +        message.success('Calculation deleted.');               
+      57 +      },                                                       
+      58 +    });                                                        
+      59 +  };                                                           
+      60 +                                                               
+      61    return (
+      62      <>
+      63        <section className="page-hero">
+
+● Update(frontend\src\pages\HistoryPage.tsx)
+  ⎿  Added 1 line
+      12  type CalculatorState = { open: false } | { open: true; initialI
+          nput?: CalculationInput };
+      13  
+      14  export function HistoryPage() {
+      15 +  const { modal, message } = App.useApp();                     
+      16    const [items, setItems] = useState<SavedCalculationSummary[] 
+          | null>(null);
+      17    const [loadError, setLoadError] = useState<string | null>(nul
+          l);
+      18    const [selectedId, setSelectedId] = useState<string | null>(n
+          ull);
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && npm run
+      typecheck 2>&1 | tail -20)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● The typecheck error is just the old test needing updates for the new flow.
+  I'll rewrite the component tests to cover login-keeps-result,
+  save-closes-modal, and delete-confirmation behaviors.
+
+● Write(frontend\src\components\CalculatorModal.test.tsx)
+  ⎿  Added 79 lines, removed 10 lines
+       1 -import { render, screen, within } from '@testing-library/react'
+         -;                                                              
+       1 +import { render, screen, waitFor, within } from '@testing-libra
+         +ry/react';                                                     
+       2  import userEvent from '@testing-library/user-event';
+       3  import { App as AntApp } from 'antd';
+       4 +import { ReactNode } from 'react';                             
+       5  import { MemoryRouter } from 'react-router-dom';
+       6  import { AuthContext, AuthState } from '../auth/AuthContext';
+       6 -import { CalculatorForm } from './CalculatorModal';            
+       7 +import { AuthModalContext } from '../auth/AuthModal';          
+       8 +import { api, SavedCalculation, SavedCalculationSummary } from 
+         +'../lib/api';                                                  
+       9 +import { HistoryPage } from '../pages/HistoryPage';            
+      10 +import { CalculatorForm, CalculatorModal } from './CalculatorMo
+         +dal';                                                          
+      11  
+       8 -function renderForm(user: AuthState['user'], method: 'even' | '
+         -itemised' = 'even') {                                          
+      12 +const ana = { id: 1, name: 'Ana', email: 'ana@example.com' };  
+      13 +                                                               
+      14 +function renderWithProviders(ui: ReactNode, user: AuthState['us
+         +er'], openAuth = vi.fn()) {                                    
+      15    const auth: AuthState = { user, loading: false, login: vi.fn(
+          ), signup: vi.fn(), logout: vi.fn() };
+      10 -  return render(                                               
+      16 +  render(                                                      
+      17      <AntApp>
+      18        <MemoryRouter>
+      19          <AuthContext.Provider value={auth}>
+      14 -          <CalculatorForm method={method} />                   
+      20 +          <AuthModalContext.Provider value={{ openAuth }}>{ui}<
+         +/AuthModalContext.Provider>                                    
+      21          </AuthContext.Provider>
+      22        </MemoryRouter>
+      23      </AntApp>,
+      24    );
+      25 +  return { openAuth };                                         
+      26  }
+      27  
+      28 +const renderForm = (user: AuthState['user'], openAuth = vi.fn()
+         +) =>                                                           
+      29 +  renderWithProviders(<CalculatorForm method="even" onSaved={vi
+         +.fn()} />, user, openAuth);                                    
+      30 +                                                               
+      31  async function fillEvenSplit() {
+      32    const ui = userEvent.setup({ delay: null });
+      33    await ui.type(screen.getByLabelText('Bill amount (incl. tax)'
+          ), '100');
+     ...
+      38    return ui;
+      39  }
+      40  
+      41 +afterEach(() => vi.restoreAllMocks());                         
+      42 +                                                               
+      43  describe('CalculatorForm', () => {
+      44    it('AC-07: shows a result only after Calculate, and clears it
+           when an input changes', async () => {
+      45      renderForm(null);
+     ...
+      56      expect(screen.queryByText('Grand total')).not.toBeInTheDocu
+          ment();
+      57    });
+      58  
+      47 -  it('AC-10: guests are asked to log in instead of seeing Save;
+         - all share options are offered', async () => {                 
+      59 +  it('AC-10: guests are offered Log in / Sign up instead of Sav
+         +e; all share options are offered', async () => {               
+      60      renderForm(null);
+      61      const ui = await fillEvenSplit();
+      62      await ui.click(screen.getByRole('button', { name: /calculat
+          e/i }));
+      51 -    expect(screen.queryByRole('button', { name: /save/i })).not
+         -.toBeInTheDocument();                                          
+      63 +    expect(screen.queryByRole('button', { name: /^save$/i })).n
+         +ot.toBeInTheDocument();                                        
+      64      expect(screen.getByText(/to save this result/)).toBeInTheDo
+          cument();
+      65      for (const name of [/whatsapp/i, /copy text/i, /image/i, /p
+          df/i]) {
+      66        expect(screen.getByRole('button', { name })).toBeInTheDoc
+          ument();
+      67      }
+      68    });
+      69  
+      58 -  it('logged-in users see a Save button', async () => {        
+      59 -    renderForm({ id: 1, name: 'Ana', email: 'ana@example.com' }
+         -);                                                             
+      70 +  it('AC-22: "Log in" opens the login modal and keeps the guest
+         +’s result', async () => {                                      
+      71 +    const { openAuth } = renderForm(null);                     
+      72      const ui = await fillEvenSplit();
+      73      await ui.click(screen.getByRole('button', { name: /calculat
+          e/i }));
+      62 -    expect(screen.getByRole('button', { name: /save/i })).toBeI
+         -nTheDocument();                                                
+      74 +    await ui.click(screen.getByRole('button', { name: 'Log in' 
+         +}));                                                           
+      75 +    expect(openAuth).toHaveBeenCalledWith('login');            
+      76 +    expect(screen.getByText('Grand total')).toBeInTheDocument()
+         +;                                                              
+      77    });
+      78  
+      79    it('AC-06: shows field errors and no result for invalid input
+          ', async () => {
+     ...
+       96      expect(screen.getAllByRole('button', { name: /copy text/i 
+           }).length).toBeGreaterThanOrEqual(2);
+       97    });
+       98  });
+       99 +                                                              
+      100 +describe('CalculatorModal', () => {                           
+      101 +  it('AC-21: saving closes the modal and confirms the save', a
+          +sync () => {                                                  
+      102 +    const save = vi.spyOn(api, 'saveCalculation').mockResolved
+          +Value({ id: 'abc' } as SavedCalculation);                     
+      103 +    const onClose = vi.fn();                                  
+      104 +    const onSaved = vi.fn();                                  
+      105 +    renderWithProviders(<CalculatorModal open method="even" on
+          +Close={onClose} onSaved={onSaved} />, ana);                   
+      106 +    const ui = await fillEvenSplit();                         
+      107 +    await ui.click(screen.getByRole('button', { name: /calcula
+          +te/i }));                                                     
+      108 +    await ui.click(screen.getByRole('button', { name: /^save$/
+          +i }));                                                        
+      109 +    await ui.type(await screen.findByLabelText('Title (optiona
+          +l)'), 'Team lunch');                                          
+      110 +    const dialog = screen.getByRole('dialog', { name: 'Save th
+          +is result' });                                                
+      111 +    await ui.click(within(dialog).getByRole('button', { name: 
+          +/save/i }));                                                  
+      112 +                                                              
+      113 +    await waitFor(() => expect(onClose).toHaveBeenCalled());  
+      114 +    expect(save).toHaveBeenCalledWith({ title: 'Team lunch', i
+          +nput: expect.objectContaining({ method: 'even', billCents: 100
+          +00 }) });                                                     
+      115 +    expect(onSaved).toHaveBeenCalledWith({ id: 'abc' });      
+      116 +    expect(await screen.findByText('Saved to your history.')).
+          +toBeInTheDocument();                                          
+      117 +  });                                                         
+      118 +});                                                           
+      119 +                                                              
+      120 +describe('HistoryPage', () => {                               
+      121 +  const entry: SavedCalculationSummary = {                    
+      122 +    id: '11111111-1111-1111-1111-111111111111',               
+      123 +    title: 'Friday dinner',                                   
+      124 +    method: 'itemised',                                       
+      125 +    totalCents: 6480,                                         
+      126 +    peopleCount: 3,                                           
+      127 +    createdAt: new Date().toISOString(),                      
+      128 +  };                                                          
+      129 +                                                              
+      130 +  it('AC-20: deletes a saved calculation only after confirmati
+          +on', async () => {                                            
+      131 +    vi.spyOn(api, 'listCalculations').mockResolvedValue([entry
+          +]);                                                           
+      132 +    const del = vi.spyOn(api, 'deleteCalculation').mockResolve
+          +dValue(undefined);                                            
+      133 +    renderWithProviders(<HistoryPage />, ana);                
+      134 +    const ui = userEvent.setup({ delay: null });              
+      135 +    const deleteButton = await screen.findByRole('button', { n
+          +ame: 'Delete Friday dinner' });                               
+      136 +                                                              
+      137 +    // Cancel keeps it.                                       
+      138 +    await ui.click(deleteButton);                             
+      139 +    await ui.click(await screen.findByRole('button', { name: '
+          +Cancel' }));                                                  
+      140 +    expect(del).not.toHaveBeenCalled();                       
+      141 +    expect(screen.getByText('Friday dinner')).toBeInTheDocumen
+          +t();                                                          
+      142 +                                                              
+      143 +    // Confirm deletes it.                                    
+      144 +    await ui.click(deleteButton);                             
+      145 +    expect(await screen.findByText('Delete this calculation?')
+          +).toBeInTheDocument();                                        
+      146 +    await ui.click(screen.getByRole('button', { name: 'Delete'
+          + }));                                                         
+      147 +    await waitFor(() => expect(del).toHaveBeenCalledWith(entry
+          +.id));                                                        
+      148 +    expect(await screen.findByText('Calculation deleted.')).to
+          +BeInTheDocument();                                            
+      149 +    await waitFor(() => expect(screen.queryByText('Friday dinn
+          +er')).not.toBeInTheDocument());                               
+      150 +    // Clicking Delete must not also open the details.        
+      151 +    expect(screen.queryByText('Saved calculation')).not.toBeIn
+          +TheDocument();                                                
+      152 +  });                                                         
+      153 +});                                                           
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && npm run
+      typecheck 2>&1 | tail -5 && npm test 2>&1 | grep -vE "^\s+at " | grep -E
+      "✓|×|Test File…)
+  ⎿  (No output)
+  ⎿  (timeout 10m)
+
+● Found two test issues: the Save button's accessible name includes a hidden
+  label breaking the exact match, and a lingering dialog animation causes a
+  brief duplicate on Delete. I'll fix both queries.
+
+● Update(frontend\src\components\CalculatorModal.test.tsx)
+  ⎿  Added 1 line, removed 1 line
+      105      renderWithProviders(<CalculatorModal open method="even" on
+           Close={onClose} onSaved={onSaved} />, ana);
+      106      const ui = await fillEvenSplit();
+      107      await ui.click(screen.getByRole('button', { name: /calcula
+           te/i }));
+      108 -    await ui.click(screen.getByRole('button', { name: /^save$/
+          -i }));                                                        
+      108 +    await ui.click(screen.getByRole('button', { name: /save/i 
+          +}));                                                          
+      109      await ui.type(await screen.findByLabelText('Title (optiona
+           l)'), 'Team lunch');
+      110      const dialog = screen.getByRole('dialog', { name: 'Save th
+           is result' });
+      111      await ui.click(within(dialog).getByRole('button', { name: 
+           /save/i }));
+
+● Update(frontend\src\components\CalculatorModal.test.tsx)
+  ⎿  Added 1 line, removed 1 line
+      60      renderForm(null);
+      61      const ui = await fillEvenSplit();
+      62      await ui.click(screen.getByRole('button', { name: /calculat
+          e/i }));
+      63 -    expect(screen.queryByRole('button', { name: /^save$/i })).n
+         -ot.toBeInTheDocument();                                        
+      63 +    expect(screen.queryByRole('button', { name: /save/i })).not
+         +.toBeInTheDocument();                                          
+      64      expect(screen.getByText(/to save this result/)).toBeInTheDo
+          cument();
+      65      for (const name of [/whatsapp/i, /copy text/i, /image/i, /p
+          df/i]) {
+      66        expect(screen.getByRole('button', { name })).toBeInTheDoc
+          ument();
+
+● Update(frontend\src\components\CalculatorModal.test.tsx)
+  ⎿  Added 3 lines, removed 2 lines
+      142  
+      143      // Confirm deletes it.
+      144      await ui.click(deleteButton);
+      145 -    expect(await screen.findByText('Delete this calculation?')
+          -).toBeInTheDocument();                                        
+      146 -    await ui.click(screen.getByRole('button', { name: 'Delete'
+          - }));                                                         
+      145 +    // The cancelled dialog may still be animating out, so use
+          + the newest one.                                              
+      146 +    await waitFor(() => expect(screen.getAllByText('Delete thi
+          +s calculation?').length).toBeGreaterThan(0));                 
+      147 +    await ui.click(screen.getAllByRole('button', { name: 'Dele
+          +te' }).at(-1)!);                                              
+      148      await waitFor(() => expect(del).toHaveBeenCalledWith(entry
+           .id));
+      149      expect(await screen.findByText('Calculation deleted.')).to
+           BeInTheDocument();
+      150      await waitFor(() => expect(screen.queryByText('Friday dinn
+           er')).not.toBeInTheDocument());
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && npm test
+      2>&1 | grep -vE "^\s+at " | grep -E "✓|×|Test Files|Tests
+      |Error|Expected|Received|Una…)
+  ⎿  (No output)
+  ⎿  (timeout 10m)
+
+● The save dialog doesn't expose its title as an accessible name, so I'll click
+  its footer button directly:
+
+● Update(frontend\src\components\CalculatorModal.test.tsx)
+  ⎿  Added 2 lines, removed 2 lines
+      107      await ui.click(screen.getByRole('button', { name: /calcula
+           te/i }));
+      108      await ui.click(screen.getByRole('button', { name: /save/i 
+           }));
+      109      await ui.type(await screen.findByLabelText('Title (optiona
+           l)'), 'Team lunch');
+      110 -    const dialog = screen.getByRole('dialog', { name: 'Save th
+          -is result' });                                                
+      111 -    await ui.click(within(dialog).getByRole('button', { name: 
+          -/save/i }));                                                  
+      110 +    // The title dialog opens on top; its Save button is the l
+          +ast one rendered.                                             
+      111 +    await ui.click(screen.getAllByRole('button', { name: /save
+          +/i }).at(-1)!);                                               
+      112  
+      113      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      114      expect(save).toHaveBeenCalledWith({ title: 'Team lunch', i
+           nput: expect.objectContaining({ method: 'even', billCents: 100
+           00 }) });
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && npm run
+      typecheck 2>&1 | grep error; npm test 2>&1 | grep -vE "^\s+at " | grep -E
+      "×|Test Files…)
+  ⎿  (No output)
+  ⎿  (timeout 10m)
+
+● All tests pass: 49 backend and engine, 16 frontend. Next I'll rebuild Docker
+  and drive the new flows in a real browser.
+
+  Made 1 scratchpad edit +107 (ctrl+o to expand)
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src" && docker compose up
+      --build -d 2>&1 | tail -2 && cd
+      "C:/Users/DELL/AppData/Local/Temp/claude/c--Users-DELL…)
+  ⎿  (No output)
+  ⎿  (timeout 10m)
+
+● The confirm dialog renders its title twice (one copy is hidden for
+  accessibility), so my selector was matching the hidden one. That's a
+  test-script fix:
+
+● Bash(cd "C:/Users/DELL/AppData/Local/Temp/claude/c--Users-DELL-Desktop-tip-and
+      -bill-splitter/008705a4-6cc9-4562-a345-6f992e831954/scratchpad/ui" && sed
+      -i "s/page.wa…)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● Found a bug where visiting /signup while logged in still shows the modal
+  because the redirect fires before the session check completes. I'll fix it by
+  waiting for that check to finish first.
+
+● Update(frontend\src\auth\AuthModal.tsx)
+  ⎿  Added 11 lines, removed 5 lines
+      65  /** Old /login and /signup links (and protected-page redirects)
+           open the modal over Home. */
+      66  export function AuthRedirect({ mode }: { mode: AuthMode }) {
+      67    const { openAuth } = useAuthModal();
+      68 -  const { user } = useAuth();                                  
+      68 +  const { user, loading } = useAuth();                         
+      69    const navigate = useNavigate();
+      70 -  const from = (useLocation().state as { from?: string } | null
+         -)?.from;                                                       
+      70 +  const state = useLocation().state as { from?: string } | null
+         +;                                                              
+      71 +  const from = state?.from?.startsWith('/') ? state.from : unde
+         +fined;                                                         
+      72  
+      73    useEffect(() => {
+      73 -    if (!user) openAuth(mode, from?.startsWith('/') ? { redirec
+         -tTo: from } : undefined);                                      
+      74 -    navigate('/', { replace: true });                          
+      75 -  }, []); // run once on arrival                               
+      74 +    if (loading) return; // wait for the session check, or logg
+         +ed-in users would see the form                                 
+      75 +    if (user) {                                                
+      76 +      navigate(from ?? '/', { replace: true });                
+      77 +    } else {                                                   
+      78 +      openAuth(mode, { redirectTo: from });                    
+      79 +      navigate('/', { replace: true });                        
+      80 +    }                                                          
+      81 +  }, [loading]); // act once, when the session is known        
+      82  
+      83    return null;
+      84  }
+
+  Read 2 files (ctrl+o to expand)
+
+● Both screens look right. I'll rebuild with the redirect fix and re-run the
+  full browser check:
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src/frontend" && npm run
+      typecheck 2>&1 | grep error; cd .. && docker compose up --build -d
+      frontend 2>&1 | tail…)
+  ⎿  (No output)
+  ⎿  (timeout 10m)
+
+● The new-flow check passes fully—the old regression script just failed because
+  it still expected a login page. I'll update it to target the modal and its
+  save step, then re-run it to recheck the earlier flows too.
+● Bash(cd "C:/Users/DELL/AppData/Local/Temp/claude/c--Users-DELL-Desktop-tip-and
+      -bill-splitter/008705a4-6cc9-4562-a345-6f992e831954/scratchpad/ui" && node
+      -e "
+      const f…)
+  ⎿  (No output)
+  ⎿  (timeout 5m)
+
+● Every flow passes: the new behaviour and the earlier regression run. No
+  console errors. Last step is updating the requirements doc and README for the
+  changed decisions.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 1 line, removed 1 line
+      42  - Receipt scanning (OCR), payment integrations (Venmo, PayPal…)
+          .
+      43  - Password reset, email verification, social login.
+      44  - Contact form submission (Contact Us is informational only).
+      45 -- Editing or deleting saved calculations *(see open question Q4
+         -)*.                                                            
+      45 +- Editing saved calculations in place (use **Edit a copy** inst
+         +ead).                                                          
+      46  
+      47  ---
+      48  
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 1 line, removed 1 line
+      51  | Element | Guest | Logged-in |
+      52  |---|---|---|
+      53  | Nav links | Home, About, Contact Us | Home, About, Contact Us
+          , History |
+      54 -| Right side of header | **Login**, **Sign Up** buttons | User'
+         -s name → dropdown with **Logout** |                            
+      54 +| Right side of header | **Login**, **Sign Up** buttons (open m
+         +odals) | User's name → dropdown with **Logout** |              
+      55  
+      56  - **Home (`/`)** — hero area: calculator entry on the left, rel
+          evant illustration on the right (illustration hidden on mobile)
+          . Below the hero: **About** and **Contact Us** sections. The Ab
+          out / Contact Us nav links scroll to those sections (from other
+           pages they navigate to `/#about`, `/#contact`).
+      57  - **Login (`/login`)**, **Sign Up (`/signup`)** — standalone pa
+          ges.
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 2 lines, removed 2 lines
+      54  | Right side of header | **Login**, **Sign Up** buttons (open m
+          odals) | User's name → dropdown with **Logout** |
+      55  
+      56  - **Home (`/`)** — hero area: calculator entry on the left, rel
+          evant illustration on the right (illustration hidden on mobile)
+          . Below the hero: **About** and **Contact Us** sections. The Ab
+          out / Contact Us nav links scroll to those sections (from other
+           pages they navigate to `/#about`, `/#contact`).
+      57 -- **Login (`/login`)**, **Sign Up (`/signup`)** — standalone pa
+         -ges.                                                           
+      58 -- **History (`/history`)** — protected; hero banner + saved cal
+         -culations list. Guests visiting it are redirected to Login.    
+      57 +- **Login** and **Sign Up** — **modals** that open on top of th
+         +e current screen, with links to switch between them. The `/logi
+         +n` and `/signup` URLs open the matching modal over Home.       
+      58 +- **History (`/history`)** — protected; hero banner + saved cal
+         +culations list. Guests visiting it are taken to Home with the L
+         +ogin modal open, and return to History after logging in.       
+      59  - On mobile the nav collapses into a menu (hamburger/drawer).
+      60  
+      61  ---
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 1 line, removed 1 line
+      69  4. If inputs are invalid, errors are shown next to the fields; 
+          no result is produced.
+      70  5. If valid, the result is shown in the modal, with any warning
+          s, plus actions:
+      71     - **Share** (WhatsApp, Copy text, Image, PDF) — everyone.
+      72 -   - **Save** — logged-in users. Guests see a "Log in to save" 
+         -hint instead.                                                  
+      72 +   - **Save** — logged-in users. Guests see "Log in or sign up 
+         +to save this result"; the links open the Login / Sign Up modal 
+         +**on top of the calculator**, so the result is kept and can be 
+         +saved straight after logging in.                               
+      73  6. Changing any input after calculating **clears the result**; 
+          the user must press Calculate again. (Prevents saving/sharing a
+           result that doesn't match the inputs.)
+      74  7. Closing the modal discards unsaved input and results.
+      75  
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 1 line, removed 1 line
+      76  ### 4.2 Save (logged-in)
+      77  1. From a result, the user presses **Save**, optionally enters 
+          a title (e.g. "Friday dinner"), and confirms.
+      78  2. The backend validates the inputs, **recalculates the result 
+          itself**, and stores the snapshot.
+      79 -3. A success message is shown. Saving the same result twice cre
+         -ates two entries.                                              
+      79 +3. The calculator modal **closes** and a brief confirmation ("S
+         +aved to your history.") is shown. There is no de-duplication: s
+         +aving the same inputs again creates another entry.             
+      80  
+      81  ### 4.3 History
+      82  1. User opens **History**: hero banner, then saved calculations
+           **grouped by saved date** (local time zone), newest first. Gro
+          up headings: "Today", "Yesterday", then e.g. "Mon, 27 Oct 2026"
+          .
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 4 lines, removed 3 lines
+      83  2. Each row shows: title (or default "Even split" / "Itemised s
+          plit"), grand total, number of people, time saved.
+      84  3. Selecting a row opens a **detail modal** (read-only): inputs
+          , per-person breakdown, warnings at time of saving, and actions
+           **Share** and **Edit a copy**.
+      85  4. **Edit a copy** opens the calculator modal pre-filled with t
+          hose inputs; saving creates a **new** entry. The original is ne
+          ver modified.
+      86 -5. Empty state: "No saved calculations yet" with a button to st
+         -art a new split.                                               
+      86 +5. **Delete:** each row has a Delete button. It asks for confir
+         +mation ("Delete this calculation?", naming the entry and its to
+         +tal; **Cancel** / **Delete**). On confirm the entry is permanen
+         +tly removed and a brief "Calculation deleted." confirmation is 
+         +shown. Cancel changes nothing. Pressing Delete never opens the 
+         +details.                                                       
+      87 +6. Empty state: "No saved calculations yet" with a button to st
+         +art a new split.                                               
+      88  
+      88 -### 4.4 Sign up / Log in / Log out                             
+      89 -- **Sign up:** name, email, password, confirm password. On succ
+         -ess the user is logged in and returned to Home.                
+      89 +### 4.4 Sign up / Log in / Log out (modals)                    
+      90 +- **Sign up:** name, email, password, confirm password. On succ
+         +ess the modal closes, the user is logged in and stays on the cu
+         +rrent screen.                                                  
+      91  - **Log in:** email and password. On failure: generic "Email or
+           password is incorrect".
+      92  - **Log out:** from the name dropdown; clears the session and r
+          eturns to Home.
+      93  - **Session expiry:** if a protected request fails because the 
+          session expired, the user is told and sent to Login.
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 1 line, removed 1 line
+      90  - **Sign up:** name, email, password, confirm password. On succ
+          ess the modal closes, the user is logged in and stays on the cu
+          rrent screen.
+      91  - **Log in:** email and password. On failure: generic "Email or
+           password is incorrect".
+      92  - **Log out:** from the name dropdown; clears the session and r
+          eturns to Home.
+      93 -- **Session expiry:** if a protected request fails because the 
+         -session expired, the user is told and sent to Login.           
+      93 +- **Session expiry:** if a protected request fails because the 
+         +session expired, the user is told and the Login modal opens.   
+      94  
+      95  ---
+      96  
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 5 lines
+      286  **Setup**
+      287  - AC-19 Following the README on a clean machine with Docker, `
+           docker compose up` starts frontend, backend and MySQL, and the
+            app works end to end.
+      288  
+      289 +**Flow update (2026-10-29)**                                  
+      290 +- AC-20 Each saved calculation in History can be deleted after
+          + a confirmation; Cancel keeps it. API: deleting another user's
+          + calculation → 404; without a session → 401.                  
+      291 +- AC-21 Saving a result closes the calculator modal and shows 
+          +a brief "Saved to your history." confirmation.                
+      292 +- AC-22 Login and Sign Up open as modals (from the header, `/l
+          +ogin`, `/signup`, or a protected page). A guest who logs in fr
+          +om the calculator keeps their result and can save it.         
+      293 +                                                              
+      294  ---
+      295  
+      296  ## 13. Resolved questions
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 3 lines, removed 3 lines
+      320  | D15 | WhatsApp via `wa.me`; fallback message + Copy text if 
+           blocked; Copy text always available. |
+      321  | D16 | Stack: React + Vite + Ant Design, NestJS + JWT, MySQL,
+            Docker Compose; repo = README.md + src/. |
+      322  | D17 | The hero contains the calculator entry point: the user
+            chooses Even or Itemised and clicks **Start splitting**, whic
+           h opens the full calculator form in a modal. |
+      323 -| D18 | Login and Sign Up are separate pages. |               
+      324 -| D19 | A guest's unsaved result is not kept after logging in.
+          - |                                                            
+      325 -| D20 | Saved calculations cannot be deleted in v1. |         
+      323 +| D18 | ~~Login and Sign Up are separate pages.~~ Superseded b
+          +y D24. |                                                      
+      324 +| D19 | ~~A guest's unsaved result is not kept after logging i
+          +n.~~ Superseded by D25. |                                     
+      325 +| D20 | ~~Saved calculations cannot be deleted in v1.~~ Supers
+          +eded by D27. |                                                
+      326  | D21 | About and Contact Us are sections on the Home page; na
+           v links scroll to them. |
+      327  | D22 | Hero image is a built-in illustration, hidden on mobil
+           e. |
+      328  | D23 | History shows all saved calculations on one page, no p
+           agination. |
+
+● Update(docs\REQUIREMENTS.md)
+  ⎿  Added 4 lines
+      326  | D21 | About and Contact Us are sections on the Home page; na
+           v links scroll to them. |
+      327  | D22 | Hero image is a built-in illustration, hidden on mobil
+           e. |
+      328  | D23 | History shows all saved calculations on one page, no p
+           agination. |
+      329 +| D24 | Login and Sign Up open in modals instead of separate p
+          +ages. |                                                       
+      330 +| D25 | A guest who logs in from the calculator keeps their un
+          +saved result and can save it. |                               
+      331 +| D26 | Saving closes the calculator modal and shows a brief c
+          +onfirmation. |                                                
+      332 +| D27 | Saved calculations can be deleted from History, after 
+          +a confirmation. |                                             
+
+● The requirements doc is updated. Now the README:
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Update(~\Desktop\tip-and-bill-splitter\README.md)
+  ⎿  Added 3 lines, removed 2 lines
+      19  - **Fair cents** — amounts are shown to 2 decimals; leftover ce
+          nts go to the largest remainders (ties to the first-listed pers
+          on), so bill shares, tip shares and totals all add up exactly a
+          nd nobody is more than 1¢ from their exact share.
+      20  - **Calculate on demand** — results appear only when **Calculat
+          e** is pressed; editing any input clears the result so a saved 
+          or shared result always matches its inputs.
+      21  - **Share / export** — WhatsApp (pre-filled text), Copy text, P
+          NG image, PDF. If WhatsApp can't be opened, the app says so and
+           offers Copy text.
+      22 -- **Accounts** — sign up, log in, log out. Logged-in users can 
+         -save results (optionally titled), browse them in **History** gr
+         -ouped by date, open details, share them, or **Edit a copy** (sa
+         -ved results are read-only snapshots).                          
+      23 -- **Pages** — Home (calculator entry point + illustration, Abou
+         -t and Contact Us sections), Login, Sign Up, History.           
+      22 +- **Accounts** — sign up, log in and log out, with Login and Si
+         +gn Up in **modals**. A guest who logs in from the calculator ke
+         +eps their result and can save it straight away.                
+      23 +- **Saving & History** — logged-in users save results manually 
+         +(optionally titled); saving closes the calculator and shows a b
+         +rief confirmation. **History** groups saved results by date; ea
+         +ch can be opened (details, share, **Edit a copy**) or **deleted
+         +** after a confirmation. Saved results are read-only snapshots.
+      24 +- **Pages** — Home (calculator entry point + illustration, Abou
+         +t and Contact Us sections) and History.                        
+      25  
+      26  The full, approved product requirements — calculation rules, wo
+          rked examples, edge cases and acceptance criteria — are in [src
+          /docs/REQUIREMENTS.md](src/docs/REQUIREMENTS.md).
+      27  
+
+● Update(~\Desktop\tip-and-bill-splitter\README.md)
+  ⎿  Added 1 line, removed 1 line
+      46  ├── shared/calc/            # calculation engine (money parsing
+          , fair-cent allocation, validation) + its tests
+      47  ├── backend/                # NestJS API
+      48  │   ├── src/auth/           # signup / login / logout / me, JWT
+           guard
+      49 -│   ├── src/calculations/   # save / list / get saved calculati
+         -ons                                                            
+      49 +│   ├── src/calculations/   # save / list / get / delete saved 
+         +calculations                                                   
+      50  │   ├── src/database/       # migration (schema)
+      51  │   └── test/               # API tests
+      52  └── frontend/               # React app
+
+● Update(~\Desktop\tip-and-bill-splitter\README.md)
+  ⎿  Added 2 lines, removed 1 line
+      51  │   └── test/               # API tests
+      52  └── frontend/               # React app
+      53      ├── src/components/     # calculator modal, result view, sh
+          are/save actions, header
+      54 -    ├── src/pages/          # Home, Login/Sign up, History     
+      54 +    ├── src/auth/           # session state, Login / Sign Up mo
+         +dal                                                            
+      55 +    ├── src/pages/          # Home, History                    
+      56      └── src/lib/            # API client, form → engine mapping
+          , share text, PDF/PNG export
+      57  ```
+      58  
+
+● Update(~\Desktop\tip-and-bill-splitter\README.md)
+  ⎿  Added 1 line, removed 1 line
+      120  | Suite | What it covers |
+      121  |---|---|
+      122  | `src/shared/calc/calc.spec.ts` (36 tests, run by the backend
+           's `npm test`) | Money parsing/formatting; worked examples fro
+           m the requirements (AC-01, AC-02); half-up tip rounding (AC-05
+           ); every edge case (blocks and warnings); 6,000 randomised inp
+           uts checking that all columns add up exactly and every share i
+           s within 1¢ (AC-03) |
+      123 -| `src/backend/test/api.e2e-spec.ts` (12 tests) | Signup/login
+          -/logout, httpOnly cookie, bcrypt hashing (AC-13), validation (
+          -AC-08), 401 without a session and with forged tokens, 404 for 
+          -another user's calculation, per-user lists (AC-11, AC-12), ser
+          -ver-side results only (AC-15). Uses the real controllers, guar
+          -ds and validation with an in-memory repository, so no database
+          - is needed |                                                  
+      123 +| `src/backend/test/api.e2e-spec.ts` (13 tests) | Signup/login
+          +/logout, httpOnly cookie, bcrypt hashing (AC-13), validation (
+          +AC-08), 401 without a session and with forged tokens, 404 for 
+          +another user's calculation, per-user lists (AC-11, AC-12), ser
+          +ver-side results only (AC-15), deleting only your own calculat
+          +ions (AC-20). Uses the real controllers, guards and validation
+          + with an in-memory repository, so no database is needed |     
+      124  | `src/frontend/src/lib/lib.test.ts` (9 tests) | Form → engine
+            mapping and error messages, "Edit a copy" round-trip, share t
+           ext, WhatsApp link, file names, History date grouping |
+      125  | `src/frontend/src/components/CalculatorModal.test.tsx` (5 te
+           sts) | Result only after Calculate and cleared on edit (AC-07)
+           , guests see no Save (AC-10), field errors (AC-06), WhatsApp f
+           allback (AC-17) |
+      126  
+
+● Update(~\Desktop\tip-and-bill-splitter\README.md)
+  ⎿  Added 1 line, removed 1 line
+      122  | `src/shared/calc/calc.spec.ts` (36 tests, run by the backend
+           's `npm test`) | Money parsing/formatting; worked examples fro
+           m the requirements (AC-01, AC-02); half-up tip rounding (AC-05
+           ); every edge case (blocks and warnings); 6,000 randomised inp
+           uts checking that all columns add up exactly and every share i
+           s within 1¢ (AC-03) |
+      123  | `src/backend/test/api.e2e-spec.ts` (13 tests) | Signup/login
+           /logout, httpOnly cookie, bcrypt hashing (AC-13), validation (
+           AC-08), 401 without a session and with forged tokens, 404 for 
+           another user's calculation, per-user lists (AC-11, AC-12), ser
+           ver-side results only (AC-15), deleting only your own calculat
+           ions (AC-20). Uses the real controllers, guards and validation
+            with an in-memory repository, so no database is needed |
+      124  | `src/frontend/src/lib/lib.test.ts` (9 tests) | Form → engine
+            mapping and error messages, "Edit a copy" round-trip, share t
+           ext, WhatsApp link, file names, History date grouping |
+      125 -| `src/frontend/src/components/CalculatorModal.test.tsx` (5 te
+          -sts) | Result only after Calculate and cleared on edit (AC-07)
+          -, guests see no Save (AC-10), field errors (AC-06), WhatsApp f
+          -allback (AC-17) |                                             
+      125 +| `src/frontend/src/components/CalculatorModal.test.tsx` (7 te
+          +sts) | Result only after Calculate and cleared on edit (AC-07)
+          +, guests see no Save (AC-10), "Log in" from a result opens the
+          + modal and keeps the result (AC-22), field errors (AC-06), Wha
+          +tsApp fallback (AC-17), saving closes the modal with a confirm
+          +ation (AC-21), History delete only after confirmation (AC-20) 
+          +|                                                             
+      126  
+      127  The frontend component tests are slow (~15 s each) because Ant
+            Design renders slowly under jsdom.
+      128  
+
+● Update(~\Desktop\tip-and-bill-splitter\README.md)
+  ⎿  Added 1 line, removed 1 line
+      131  Beyond the automated tests, the Docker build was checked end t
+           o end:
+      132  
+      133  - **API against the real MySQL stack** — signup, save, list, c
+           ross-user access (404), guest access (401), bcrypt hashes in t
+           he `users` table, the migration recorded, security headers pre
+           sent, login rate limit (429 after 10 attempts/minute).
+      134 -- **Browser (headless Chrome) at 1280 px and 360 px** — guest 
+          -even split ($39.34 / $39.33 / $39.33), no Save for guests, Cop
+          -y text, PNG and PDF downloads, WhatsApp link, result cleared o
+          -n edit, hero image hidden on mobile with no horizontal scrolli
+          -ng, itemised split matching the worked example, Save → History
+          - (grouped "Today") → details → PDF export → Edit a copy (pre-f
+          -illed), logout, and `/history` redirecting guests to Login. No
+          - console errors.                                              
+      134 +- **Browser (headless Chrome) at 1280 px and 360 px** — guest 
+          +even split ($39.34 / $39.33 / $39.33), no Save for guests, Cop
+          +y text, PNG and PDF downloads, WhatsApp link, result cleared o
+          +n edit, hero image hidden on mobile with no horizontal scrolli
+          +ng, itemised split matching the worked example, Save (calculat
+          +or closes, confirmation shown) → History (grouped "Today") → d
+          +etails → PDF export → Edit a copy (pre-filled), logout. Login/
+          +Sign Up modals from the header; guest logs in from the result 
+          +and saves it without losing it; History delete with Cancel and
+          + Delete (persists after reload); `/history` as a guest opens t
+          +he Login modal and returns to History after login; `/signup` w
+          +hile logged in doesn't show the form. No console errors.      
+      135  
+      136  ## Security
+      137  
+
+● Update(~\Desktop\tip-and-bill-splitter\README.md)
+  ⎿  Added 1 line
+      156  | `GET /calculations` | ✅ | List own saved calculations (newe
+           st first) |
+      157  | `GET /calculations/:id` | ✅ | One own calculation (404 othe
+           rwise) |
+      158  | `POST /calculations` | ✅ | Save `{ title?, input }`; result
+            calculated on the server |
+      159 +| `DELETE /calculations/:id` | ✅ | Delete one own calculation
+          + (204; 404 otherwise) |                                       
+      160  | `GET /health` | — | Health check |
+      161  
+      162  ## AI tool and model used
+● Update(~\Desktop\tip-and-bill-splitter\README.md)
+  ⎿  Added 1 line, removed 1 line
+      176  - **USD only**. Amounts up to $99,999.99; 1–50 people; 1–100 i
+           tems.
+      177  - Item prices are **line totals** (no quantity field). A share
+           d item is split equally between the people assigned to it.
+      178  - Fixed tip larger than the bill, or items adding up to more t
+           han the bill → **warning, then continue**. Unassigned items, d
+           uplicate names, or an item total of $0 → **blocked** with an e
+           rror.
+      179 -- A guest's unsaved result is not kept after logging in. Saved
+          - calculations cannot be deleted in v1. History shows all entri
+          -es without pagination.                                        
+      179 +- A guest who logs in from the calculator keeps their result. 
+          +Deleting a saved calculation is permanent (no undo). History s
+          +hows all entries without pagination.                          
+      180  - **Sharing means export/send** (WhatsApp text, Copy text, ima
+           ge, PDF) — no public links.
+      181  - **Contact Us details are placeholders** (`support@example.co
+           m`, a 555 phone number, an example address) and are labelled a
+           s such; there is no contact form.
+      182  
+
+● Bash(cd "C:/Users/DELL/Desktop/tip-and-bill-splitter/src" && ls backend
+      frontend | grep -E "dist|tsbuildinfo"; rm -rf backend/dist frontend/dist
+      backend/*.tsbuildinf…)
+  ⎿  (No output)
+
+● The three flow changes are built and working; the updated app is running at
+  http://localhost:8080.
+
+  1. Login and Sign Up open in modals. The header buttons open them over the
+     current screen, with a link inside each to switch to the other.
+     - The old /login and /signup links still work: they open the matching modal
+       over Home.
+     - A guest who opens History is shown the Login modal over Home, then taken
+       back to History after logging in.
+     - When a session expires, the Login modal opens.
+  2. A guest who logs in from a result keeps it. As you chose, the login modal
+     opens on top of the calculator, so after logging in the result is still
+     there and Save appears.
+  3. Saving closes the calculator and shows a brief "Saved to your history."
+     message.
+  4. Each History row has a Delete button (a red bin icon). It asks "Delete this
+     calculation?", naming the entry and its total, with Cancel and Delete
+     buttons. Deleting is permanent and shows "Calculation deleted." Pressing
+     Delete doesn't also open the details.
+     - On the server, only the owner can delete a calculation; anyone else gets
+       404, and a request without a login gets 401.
+
+  Checks:
+  - Automated tests: all pass, 49 backend and engine tests and 16 frontend
+    tests. New ones cover delete permissions, Cancel versus Delete, keeping the
+    guest's result through login, and saving closing the modal.
+  - Browser walkthrough: I drove the rebuilt Docker app in Chrome at desktop and
+    phone widths, covering both the new flows and every earlier flow again. No
+    console errors.
+  - Bug found and fixed: opening /signup directly while already logged in
+    briefly showed the sign-up form. It now waits for the login check and
+    doesn't show the form.
+
+  Docs updated:
+  - REQUIREMENTS.md (src/docs/REQUIREMENTS.md): the user flows now describe the
+    modals, closing on save, and delete. D18, D19 and D20 are struck through and
+    replaced by D24–D27, and there are three new acceptance criteria, AC-20 to
+    AC-22.
+  - README.md: features, the new delete endpoint, the test list, verification
+    and assumptions.
